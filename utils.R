@@ -613,7 +613,7 @@ boot_iter_resample = function(
     boot_data[[treatment]] == treated_level
   )
 
-  # Compute AIPW estimate with resampled weights (these work fine)
+  # Compute AIPW estimate with resampled weights
   aipw_result = aipw_att(
     outcome = outcome,
     treatment = treatment,
@@ -623,7 +623,7 @@ boot_iter_resample = function(
     verbose = FALSE
   )
 
-  # Compute DRS estimate with resampled weights (these work fine)
+  # Compute DRS estimate with resampled weights
   drs_result = drs_att(
     outcome = outcome,
     treatment = treatment,
@@ -655,7 +655,12 @@ boot_iter_resample = function(
         # Check for valid weights
         if (all(is.finite(weights_vec)) && all(weights_vec > 0)) {
           # Compute standardized differences using our function
-          std_diffs = unlist(sapply(covariates, std.diff, z = treat_vec, w = weights_vec))
+          std_diffs = unlist(sapply(
+            covariates,
+            std.diff,
+            z = treat_vec,
+            w = weights_vec
+          ))
           std_diffs = std_diffs[!is.na(std_diffs)]
 
           if (length(std_diffs) > 0) {
@@ -718,7 +723,8 @@ boot_iter_reweight = function(
     boot_data[[treatment]] == treated_level
   )
 
-  # Fit propensity score model (this works fine)
+  # Fit propensity score model
+  set.seed(seed_offset)
   ps_fit = do.call(
     "ps",
     c(
@@ -736,7 +742,7 @@ boot_iter_reweight = function(
   # Extract weights
   boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
 
-  # Compute AIPW estimate (this works fine)
+  # Compute AIPW estimate
   aipw_result = aipw_att(
     outcome = outcome,
     treatment = treatment,
@@ -746,7 +752,7 @@ boot_iter_reweight = function(
     verbose = FALSE
   )
 
-  # Compute DRS estimate (this works fine)
+  # Compute DRS estimate
   drs_result = drs_att(
     outcome = outcome,
     treatment = treatment,
@@ -764,7 +770,10 @@ boot_iter_reweight = function(
   tryCatch(
     {
       # Extract all covariates (exclude treatment, outcome, and weight)
-      covariate_cols = setdiff(names(boot_data), c(treatment, outcome, "ps_wgt"))
+      covariate_cols = setdiff(
+        names(boot_data),
+        c(treatment, outcome, "ps_wgt")
+      )
 
       if (length(covariate_cols) > 0) {
         covariates = boot_data[, covariate_cols, drop = FALSE]
@@ -778,7 +787,12 @@ boot_iter_reweight = function(
         # Check for valid weights
         if (all(is.finite(weights_vec)) && all(weights_vec > 0)) {
           # Compute standardized differences using our function
-          std_diffs = unlist(sapply(covariates, std.diff, z = treat_vec, w = weights_vec))
+          std_diffs = unlist(sapply(
+            covariates,
+            std.diff,
+            z = treat_vec,
+            w = weights_vec
+          ))
           std_diffs = std_diffs[!is.na(std_diffs)]
 
           if (length(std_diffs) > 0) {
@@ -1148,18 +1162,36 @@ DR_att = function(
       )
 
       cat("\n=== Bootstrap Balance Diagnostics ===\n")
-      cat(sprintf("Average ASD across bootstrap samples: %.4f (SD: %.4f)\n",
-                  balance_summary$avg_asd$mean, balance_summary$avg_asd$sd))
-      cat(sprintf("  Range: [%.4f, %.4f]\n",
-                  balance_summary$avg_asd$min, balance_summary$avg_asd$max))
-      cat(sprintf("Maximum ASD across bootstrap samples: %.4f (SD: %.4f)\n",
-                  balance_summary$max_asd$mean, balance_summary$max_asd$sd))
-      cat(sprintf("  Range: [%.4f, %.4f]\n",
-                  balance_summary$max_asd$min, balance_summary$max_asd$max))
-      cat(sprintf("Effective Sample Size: %.1f (SD: %.1f)\n",
-                  balance_summary$ess$mean, balance_summary$ess$sd))
-      cat(sprintf("  Range: [%.1f, %.1f]\n",
-                  balance_summary$ess$min, balance_summary$ess$max))
+      cat(sprintf(
+        "Average ASD across bootstrap samples: %.4f (SD: %.4f)\n",
+        balance_summary$avg_asd$mean,
+        balance_summary$avg_asd$sd
+      ))
+      cat(sprintf(
+        "  Range: [%.4f, %.4f]\n",
+        balance_summary$avg_asd$min,
+        balance_summary$avg_asd$max
+      ))
+      cat(sprintf(
+        "Maximum ASD across bootstrap samples: %.4f (SD: %.4f)\n",
+        balance_summary$max_asd$mean,
+        balance_summary$max_asd$sd
+      ))
+      cat(sprintf(
+        "  Range: [%.4f, %.4f]\n",
+        balance_summary$max_asd$min,
+        balance_summary$max_asd$max
+      ))
+      cat(sprintf(
+        "Effective Sample Size: %.1f (SD: %.1f)\n",
+        balance_summary$ess$mean,
+        balance_summary$ess$sd
+      ))
+      cat(sprintf(
+        "  Range: [%.1f, %.1f]\n",
+        balance_summary$ess$min,
+        balance_summary$ess$max
+      ))
     }
   }
 
