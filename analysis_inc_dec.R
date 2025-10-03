@@ -589,127 +589,127 @@ summary_table = data.frame(
   # Add balance diagnostics
   Avg_ASD = c(
     ifelse(
-      !is.null(results$model1_resample$bootstrap_balance$avg_asd$mean),
-      results$model1_resample$bootstrap_balance$avg_asd$mean,
+      !is.null(results$model1_resample$bootstrap_balance$avg_asd),
+      mean(results$model1_resample$bootstrap_balance$avg_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model1_reweight$bootstrap_balance$avg_asd$mean),
-      results$model1_reweight$bootstrap_balance$avg_asd$mean,
+      !is.null(results$model1_reweight$bootstrap_balance$avg_asd),
+      mean(results$model1_reweight$bootstrap_balance$avg_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model2_resample$bootstrap_balance$avg_asd$mean),
-      results$model2_resample$bootstrap_balance$avg_asd$mean,
+      !is.null(results$model2_resample$bootstrap_balance$avg_asd),
+      mean(results$model2_resample$bootstrap_balance$avg_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model2_reweight$bootstrap_balance$avg_asd$mean),
-      results$model2_reweight$bootstrap_balance$avg_asd$mean,
+      !is.null(results$model2_reweight$bootstrap_balance$avg_asd),
+      mean(results$model2_reweight$bootstrap_balance$avg_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model3_resample$bootstrap_balance$avg_asd$mean),
-      results$model3_resample$bootstrap_balance$avg_asd$mean,
+      !is.null(results$model3_resample$bootstrap_balance$avg_asd),
+      mean(results$model3_resample$bootstrap_balance$avg_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model3_reweight$bootstrap_balance$avg_asd$mean),
-      results$model3_reweight$bootstrap_balance$avg_asd$mean,
+      !is.null(results$model3_reweight$bootstrap_balance$avg_asd),
+      mean(results$model3_reweight$bootstrap_balance$avg_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model4_resample$bootstrap_balance$avg_asd$mean),
-      results$model4_resample$bootstrap_balance$avg_asd$mean,
+      !is.null(results$model4_resample$bootstrap_balance$avg_asd),
+      mean(results$model4_resample$bootstrap_balance$avg_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model4_reweight$bootstrap_balance$avg_asd$mean),
-      results$model4_reweight$bootstrap_balance$avg_asd$mean,
+      !is.null(results$model4_reweight$bootstrap_balance$avg_asd),
+      mean(results$model4_reweight$bootstrap_balance$avg_asd),
       NA
     )
   ),
   Max_ASD = c(
     ifelse(
-      !is.null(results$model1_resample$bootstrap_balance$max_asd$mean),
-      results$model1_resample$bootstrap_balance$max_asd$mean,
+      !is.null(results$model1_resample$bootstrap_balance$max_asd),
+      mean(results$model1_resample$bootstrap_balance$max_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model1_reweight$bootstrap_balance$max_asd$mean),
-      results$model1_reweight$bootstrap_balance$max_asd$mean,
+      !is.null(results$model1_reweight$bootstrap_balance$max_asd),
+      mean(results$model1_reweight$bootstrap_balance$max_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model2_resample$bootstrap_balance$max_asd$mean),
-      results$model2_resample$bootstrap_balance$max_asd$mean,
+      !is.null(results$model2_resample$bootstrap_balance$max_asd),
+      mean(results$model2_resample$bootstrap_balance$max_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model2_reweight$bootstrap_balance$max_asd$mean),
-      results$model2_reweight$bootstrap_balance$max_asd$mean,
+      !is.null(results$model2_reweight$bootstrap_balance$max_asd),
+      mean(results$model2_reweight$bootstrap_balance$max_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model3_resample$bootstrap_balance$max_asd$mean),
-      results$model3_resample$bootstrap_balance$max_asd$mean,
+      !is.null(results$model3_resample$bootstrap_balance$max_asd),
+      mean(results$model3_resample$bootstrap_balance$max_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model3_reweight$bootstrap_balance$max_asd$mean),
-      results$model3_reweight$bootstrap_balance$max_asd$mean,
+      !is.null(results$model3_reweight$bootstrap_balance$max_asd),
+      mean(results$model3_reweight$bootstrap_balance$max_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model4_resample$bootstrap_balance$max_asd$mean),
-      results$model4_resample$bootstrap_balance$max_asd$mean,
+      !is.null(results$model4_resample$bootstrap_balance$max_asd),
+      mean(results$model4_resample$bootstrap_balance$max_asd),
       NA
     ),
     ifelse(
-      !is.null(results$model4_reweight$bootstrap_balance$max_asd$mean),
-      results$model4_reweight$bootstrap_balance$max_asd$mean,
+      !is.null(results$model4_reweight$bootstrap_balance$max_asd),
+      mean(results$model4_reweight$bootstrap_balance$max_asd),
       NA
     )
   ),
   Avg_ESS = c(
     ifelse(
-      !is.null(results$model1_resample$bootstrap_balance$ess$mean),
-      results$model1_resample$bootstrap_balance$ess$mean,
+      !is.null(results$model1_resample$bootstrap_balance$ess),
+      mean(results$model1_resample$bootstrap_balance$ess),
       NA
     ),
     ifelse(
-      !is.null(results$model1_reweight$bootstrap_balance$ess$mean),
-      results$model1_reweight$bootstrap_balance$ess$mean,
+      !is.null(results$model1_reweight$bootstrap_balance$ess),
+      mean(results$model1_reweight$bootstrap_balance$ess),
       NA
     ),
     ifelse(
-      !is.null(results$model2_resample$bootstrap_balance$ess$mean),
-      results$model2_resample$bootstrap_balance$ess$mean,
+      !is.null(results$model2_resample$bootstrap_balance$ess),
+      mean(results$model2_resample$bootstrap_balance$ess),
       NA
     ),
     ifelse(
-      !is.null(results$model2_reweight$bootstrap_balance$ess$mean),
-      results$model2_reweight$bootstrap_balance$ess$mean,
+      !is.null(results$model2_reweight$bootstrap_balance$ess),
+      mean(results$model2_reweight$bootstrap_balance$ess),
       NA
     ),
     ifelse(
-      !is.null(results$model3_resample$bootstrap_balance$ess$mean),
-      results$model3_resample$bootstrap_balance$ess$mean,
+      !is.null(results$model3_resample$bootstrap_balance$ess),
+      mean(results$model3_resample$bootstrap_balance$ess),
       NA
     ),
     ifelse(
-      !is.null(results$model3_reweight$bootstrap_balance$ess$mean),
-      results$model3_reweight$bootstrap_balance$ess$mean,
+      !is.null(results$model3_reweight$bootstrap_balance$ess),
+      mean(results$model3_reweight$bootstrap_balance$ess),
       NA
     ),
     ifelse(
-      !is.null(results$model4_resample$bootstrap_balance$ess$mean),
-      results$model4_resample$bootstrap_balance$ess$mean,
+      !is.null(results$model4_resample$bootstrap_balance$ess),
+      mean(results$model4_resample$bootstrap_balance$ess),
       NA
     ),
     ifelse(
-      !is.null(results$model4_reweight$bootstrap_balance$ess$mean),
-      results$model4_reweight$bootstrap_balance$ess$mean,
+      !is.null(results$model4_reweight$bootstrap_balance$ess),
+      mean(results$model4_reweight$bootstrap_balance$ess),
       NA
     )
   )
