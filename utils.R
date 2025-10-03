@@ -594,9 +594,10 @@ cf_aipw_att = function(
     if (stratify) cat("Using stratified folding by treatment\n")
   }
 
-  # Initialize storage for predictions
+  # Initialize storage for fold-specific predictions and ATT estimates
   mu_hat_0 = numeric(n)
   weights = numeric(n)
+  att_estimates = numeric(k)
 
   # Cross-fitting loop
   for (fold in 1:k) {
@@ -604,14 +605,14 @@ cf_aipw_att = function(
       cat(sprintf("Processing fold %d/%d...\n", fold, k))
     }
 
-    # Split data
+    # Split data: predict on fold k, train on all other folds
     test_idx = folds[[fold]]
     train_idx = setdiff(1:n, test_idx)
 
     train_data = data[train_idx, ]
     test_data = data[test_idx, ]
 
-    # Fit propensity score model on training data
+    # Fit propensity score model on K-1 folds
     set.seed(seed + fold) # Ensure reproducibility across folds
     ps_fit = do.call(
       "ps",
@@ -627,7 +628,7 @@ cf_aipw_att = function(
       )
     )
 
-    # Predict propensity scores for test fold
+    # Predict propensity scores for held-out fold k
     ps_pred = predict(
       ps_fit$gbm.obj,
       newdata = test_data,
@@ -635,14 +636,14 @@ cf_aipw_att = function(
       type = "response"
     )
 
-    # Compute IPT weights for test fold (ATT weights)
+    # Compute IPT weights for held-out fold (ATT weights)
     weights[test_idx] = ifelse(
       Z[test_idx] == 1,
       1,
       ps_pred / (1 - ps_pred)
     )
 
-    # Fit outcome model on control units in training data
+    # Fit outcome model on control units from K-1 folds
     control_train = train_data[train_data[[treatment]] == 0, ]
     mu0_fit = glm(
       formula = as.formula(paste(outcome, "~", f.out)),
@@ -651,16 +652,25 @@ cf_aipw_att = function(
       control = glm.control(maxit = 50)
     )
 
-    # Predict counterfactual outcomes for test fold
+    # Predict counterfactual outcomes for held-out fold k
     mu_hat_0[test_idx] = predict(
       mu0_fit,
       newdata = test_data,
       type = "response"
     )
+
+    # Compute fold-specific AIPW estimate using only fold k data
+    Y_k = Y[test_idx]
+    Z_k = Z[test_idx]
+    weights_k = weights[test_idx]
+    mu_hat_0_k = mu_hat_0[test_idx]
+    N1_k = sum(Z_k)
+
+    att_estimates[fold] = (1 / N1_k) * sum((Z_k - (1 - Z_k) * weights_k) * (Y_k - mu_hat_0_k))
   }
 
-  # Compute cross-fitted AIPW estimator
-  att_est = (1 / N1) * sum((Z - (1 - Z) * weights) * (Y - mu_hat_0))
+  # Average fold-specific ATT estimates for final cross-fitted estimate
+  att_est = mean(att_estimates)
 
   # Output
   if (verbose) {
