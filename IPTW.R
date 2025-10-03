@@ -91,31 +91,72 @@ ps_inc_dec = do.call(
 (weight_summary_inc_dec = summary(ps_inc_dec))
 saveRDS(
   weight_summary_inc_dec,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/weighting_inc_dec.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/weighting_summary_inc_dec.rds"
 )
 
 # Global graphical assessment
+# Save plots with high resolution for academic publication
+# Convergence plot
+png(
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/convergence_plot.png",
+  width = 8,
+  height = 6,
+  units = "in",
+  res = 300
+)
 plot(ps_inc_dec, plots = 1)
-plot(ps_inc_dec, plots = 3)
-plot(ps_inc_dec, plots = 6)
+dev.off()
+
+# Overlap plot
+png(
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/overlap_plot.png",
+  width = 8,
+  height = 6,
+  units = "in",
+  res = 300
+)
 plot(ps_inc_dec, plots = 2)
+dev.off()
+
+# Balance plot
+png(
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/balance_plot.png",
+  width = 8,
+  height = 6,
+  units = "in",
+  res = 300
+)
+plot(ps_inc_dec, plots = 3)
+dev.off()
+
+# Weights plot
+png(
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/weights_plot.png",
+  width = 8,
+  height = 6,
+  units = "in",
+  res = 300
+)
+plot(ps_inc_dec, plots = 6)
+dev.off()
+
+# Also display in R session
+plot(ps_inc_dec, plots = 1) #convergence
+plot(ps_inc_dec, plots = 2) #overlap
+plot(ps_inc_dec, plots = 3) #balance
+plot(ps_inc_dec, plots = 6) #weights
 
 
 # Balance table
 (bal_tab = bal.table(ps_inc_dec))
 saveRDS(
   bal_tab,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/baltab_inc_dec.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/baltab_inc_dec.rds"
 )
 
 # Saving weights in df
-inc_dec$iptw = get.weights(ps_inc_dec, stop.method = "es.mean")
-inc_dec$ps = ps_inc_dec$ps$es.mean.ATT
+inc_dec$ipsw = get.weights(ps_inc_dec, stop.method = "es.mean")
 
-saveRDS(
-  inc_dec,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/inc_dec.rds"
-)
 
 # INCREASE VS MIX ---------------------------------------------------------------------------------####
 inc_mix = subset(d, remote_contact %in% c("increase", "mix")) %>%
@@ -158,39 +199,79 @@ ps_inc_mix = do.call(
 (weight_summary_inc_mix = summary(ps_inc_mix))
 saveRDS(
   weight_summary_inc_mix,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/weighting_inc_mix.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/weighting_summury_inc_mix.rds"
 )
 
 # Global graphical assessment
+# Save plots with high resolution for academic publication
+# Convergence plot
+png(
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/convergence_plot.png",
+  width = 8,
+  height = 6,
+  units = "in",
+  res = 300
+)
 plot(ps_inc_mix, plots = 1)
+dev.off()
+
+# Overlap plot
+png(
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/overlap_plot.png",
+  width = 8,
+  height = 6,
+  units = "in",
+  res = 300
+)
 plot(ps_inc_mix, plots = 2)
+dev.off()
+
+# Balance plot
+png(
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/balance_plot.png",
+  width = 8,
+  height = 6,
+  units = "in",
+  res = 300
+)
 plot(ps_inc_mix, plots = 3)
+dev.off()
+
+# Weights plot
+png(
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/weights_plot.png",
+  width = 8,
+  height = 6,
+  units = "in",
+  res = 300
+)
 plot(ps_inc_mix, plots = 6)
+dev.off()
+
+plot(ps_inc_mix, plots = 1) #convergence
+plot(ps_inc_mix, plots = 2) #overlap
+plot(ps_inc_mix, plots = 3) #balance
+plot(ps_inc_mix, plots = 6) #weights
 
 
 (bal_tab = bal.table(ps_inc_mix))
 saveRDS(
   bal_tab,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/baltab_inc_mix.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/baltab_inc_mix.rds"
 )
 
 # Saving weights in df
-inc_mix$iptw = get.weights(ps_inc_mix, stop.method = "es.mean")
-inc_mix$ps = ps_inc_mix$ps$es.mean.ATT
+inc_mix$ipsw = get.weights(ps_inc_mix, stop.method = "es.mean")
 
-saveRDS(
-  inc_mix,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/inc_mix.rds"
+
+# Save data with weights
+d$iptw = ifelse(
+  d$remote_contact == "increase",
+  1,
+  ifelse(d$remote_contact == "decrease", inc_dec$ipsw, inc_mix$ipsw)
 )
 
-# # Save data with weights
-# d$iptw = ifelse(
-#   d$remote_contact == "increase",
-#   1,
-#   ifelse(d$remote_contact == "decrease", inc_dec$ipsw, inc_mix$ipsw)
-# )
-
-# saveRDS(
-#   d,
-#   "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_iptw.rds"
-# )
+saveRDS(
+  d,
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_iptw.rds"
+)
