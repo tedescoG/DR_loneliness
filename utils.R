@@ -962,6 +962,11 @@ DR_att = function(
   }
 
   # Set up RNG for reproducibility
+  # L'Ecuyer-CMRG enables parallel random number generation with independent streams
+  # Setting seed once ensures reproducibility across runs
+  # Each bootstrap iteration gets different random samples via the RNG stream progression
+  # When using "reweight" method, GBM internal randomness is controlled with fixed seed
+  # to ensure bootstrap variability reflects data resampling, not algorithmic noise
   RNGkind("L'Ecuyer-CMRG")
   set.seed(seed)
 
@@ -1024,7 +1029,7 @@ DR_att = function(
         f.ps = f.ps,
         f.out = f.out,
         ps_params = ps_params,
-        seed_offset = b
+        seed_offset = seed
       )
     }
 
@@ -1040,7 +1045,7 @@ DR_att = function(
       1:n_boot,
       boot_fn,
       mc.cores = n_cores,
-      mc.set.seed = TRUE
+      mc.set.seed = FALSE # Managed by L'Ecuyer-CMRG seeding stream
     )
   } else {
     boot_results = lapply(1:n_boot, boot_fn)
