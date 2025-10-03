@@ -604,7 +604,7 @@ boot_iter_resample = function(
   #' @param f.out character - outcome model formula (RHS only)
   #' @param wgt character - name of weight variable
   #'
-  #' @return numeric vector with AIPW and DRS estimates
+  #' @return numeric vector with AIPW, DRS estimates and balance metrics
   # Resample data
   boot_data = data[indices, ]
 
@@ -613,39 +613,74 @@ boot_iter_resample = function(
     boot_data[[treatment]] == treated_level
   )
 
-  # Use existing PS weights from resampled data
+  # Compute AIPW estimate with resampled weights (these work fine)
+  aipw_result = aipw_att(
+    outcome = outcome,
+    treatment = treatment,
+    f.out = f.out,
+    wgt = wgt,
+    data = boot_data,
+    verbose = FALSE
+  )
+
+  # Compute DRS estimate with resampled weights (these work fine)
+  drs_result = drs_att(
+    outcome = outcome,
+    treatment = treatment,
+    f.out = f.out,
+    wgt = wgt,
+    data = boot_data,
+    verbose = FALSE
+  )
+
+  # Compute balance diagnostics using our std.diff function
+  avg_asd = NA
+  max_asd = NA
+  ess = NA
+
   tryCatch(
     {
-      # Compute AIPW estimate with resampled weights
-      aipw_result = aipw_att(
-        outcome = outcome,
-        treatment = treatment,
-        f.out = f.out,
-        wgt = wgt,
-        data = boot_data,
-        verbose = FALSE
-      )
+      # Extract all covariates (exclude treatment, outcome, and weight)
+      covariate_cols = setdiff(names(boot_data), c(treatment, outcome, wgt))
 
-      # Compute DRS estimate with resampled weights
-      drs_result = drs_att(
-        outcome = outcome,
-        treatment = treatment,
-        f.out = f.out,
-        wgt = wgt,
-        data = boot_data,
-        verbose = FALSE
-      )
+      if (length(covariate_cols) > 0) {
+        covariates = boot_data[, covariate_cols, drop = FALSE]
 
-      return(c(
-        aipw = aipw_result$att,
-        drs = drs_result$att
-      ))
+        # Ensure treatment is numeric 0/1
+        treat_vec = as.numeric(boot_data[[treatment]])
+
+        # Ensure weights are numeric
+        weights_vec = as.numeric(boot_data[[wgt]])
+
+        # Check for valid weights
+        if (all(is.finite(weights_vec)) && all(weights_vec > 0)) {
+          # Compute standardized differences using our function
+          std_diffs = unlist(sapply(covariates, std.diff, z = treat_vec, w = weights_vec))
+          std_diffs = std_diffs[!is.na(std_diffs)]
+
+          if (length(std_diffs) > 0) {
+            avg_asd = mean(std_diffs)
+            max_asd = max(std_diffs)
+          }
+
+          # Compute effective sample size
+          # ESS = (sum of weights)^2 / sum of weights^2
+          ess = sum(weights_vec)^2 / sum(weights_vec^2)
+        }
+      }
     },
     error = function(e) {
-      # Return NA if bootstrap iteration fails
-      return(c(aipw = NA, drs = NA))
+      # If calculation fails, leave as NA
     }
   )
+
+  return(c(
+    aipw = aipw_result$att,
+    drs = drs_result$att,
+    avg_asd = avg_asd,
+    max_asd = max_asd,
+    ess = ess
+  ))
 }
 
 # Helper function for single bootstrap iteration with PS re-estimation
@@ -674,7 +709,7 @@ boot_iter_reweight = function(
   #' @param ps_params list - GBM parameters for ps() function
   #' @param seed_offset integer - offset for random seed
   #'
-  #' @return numeric vector with AIPW and DRS estimates
+  #' @return numeric vector with AIPW, DRS estimates and balance metrics
   # Resample data
   boot_data = data[indices, ]
 
@@ -683,56 +718,92 @@ boot_iter_reweight = function(
     boot_data[[treatment]] == treated_level
   )
 
-  # Fit propensity score model
+  # Fit propensity score model (this works fine)
+  ps_fit = do.call(
+    "ps",
+    c(
+      list(
+        formula = f.ps,
+        data = boot_data,
+        estimand = "ATT",
+        stop.method = "es.mean",
+        verbose = FALSE
+      ),
+      ps_params
+    )
+  )
+
+  # Extract weights
+  boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
+
+  # Compute AIPW estimate (this works fine)
+  aipw_result = aipw_att(
+    outcome = outcome,
+    treatment = treatment,
+    f.out = f.out,
+    wgt = "ps_wgt",
+    data = boot_data,
+    verbose = FALSE
+  )
+
+  # Compute DRS estimate (this works fine)
+  drs_result = drs_att(
+    outcome = outcome,
+    treatment = treatment,
+    f.out = f.out,
+    wgt = "ps_wgt",
+    data = boot_data,
+    verbose = FALSE
+  )
+
+  # Compute balance diagnostics using our std.diff function
+  avg_asd = NA
+  max_asd = NA
+  ess = NA
+
   tryCatch(
     {
-      ps_fit = do.call(
-        "ps",
-        c(
-          list(
-            formula = f.ps,
-            data = boot_data,
-            estimand = "ATT",
-            stop.method = "es.mean",
-            verbose = FALSE
-          ),
-          ps_params
-        )
-      )
+      # Extract all covariates (exclude treatment, outcome, and weight)
+      covariate_cols = setdiff(names(boot_data), c(treatment, outcome, "ps_wgt"))
 
-      # Extract weights
-      boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
+      if (length(covariate_cols) > 0) {
+        covariates = boot_data[, covariate_cols, drop = FALSE]
 
-      # Compute AIPW estimate
-      aipw_result = aipw_att(
-        outcome = outcome,
-        treatment = treatment,
-        f.out = f.out,
-        wgt = "ps_wgt",
-        data = boot_data,
-        verbose = FALSE
-      )
+        # Ensure treatment is numeric 0/1
+        treat_vec = as.numeric(boot_data[[treatment]])
 
-      # Compute DRS estimate
-      drs_result = drs_att(
-        outcome = outcome,
-        treatment = treatment,
-        f.out = f.out,
-        wgt = "ps_wgt",
-        data = boot_data,
-        verbose = FALSE
-      )
+        # Ensure weights are numeric
+        weights_vec = as.numeric(boot_data$ps_wgt)
 
-      return(c(
-        aipw = aipw_result$att,
-        drs = drs_result$att
-      ))
+        # Check for valid weights
+        if (all(is.finite(weights_vec)) && all(weights_vec > 0)) {
+          # Compute standardized differences using our function
+          std_diffs = unlist(sapply(covariates, std.diff, z = treat_vec, w = weights_vec))
+          std_diffs = std_diffs[!is.na(std_diffs)]
+
+          if (length(std_diffs) > 0) {
+            avg_asd = mean(std_diffs)
+            max_asd = max(std_diffs)
+          }
+
+          # Compute effective sample size
+          # ESS = (sum of weights)^2 / sum of weights^2
+          ess = sum(weights_vec)^2 / sum(weights_vec^2)
+        }
+      }
     },
     error = function(e) {
-      # Return NA if bootstrap iteration fails
-      return(c(aipw = NA, drs = NA))
+      # If calculation fails, leave as NA
     }
   )
+
+  return(c(
+    aipw = aipw_result$att,
+    drs = drs_result$att,
+    avg_asd = avg_asd,
+    max_asd = max_asd,
+    ess = ess
+  ))
 }
 
 # Main bootstrap DR function
@@ -970,14 +1041,34 @@ DR_att = function(
   aipw_boots = boot_matrix[, "aipw"]
   drs_boots = boot_matrix[, "drs"]
 
+  # Extract balance metrics if available (for resample and reweight methods)
+  if (ncol(boot_matrix) > 2) {
+    avg_asd_boots = boot_matrix[, "avg_asd"]
+    max_asd_boots = boot_matrix[, "max_asd"]
+    ess_boots = boot_matrix[, "ess"]
+  } else {
+    avg_asd_boots = NULL
+    max_asd_boots = NULL
+    ess_boots = NULL
+  }
+
   # Remove failed iterations
   n_failed = sum(is.na(aipw_boots))
   if (n_failed > 0 && verbose) {
     cat(sprintf("\nWarning: %d bootstrap iterations failed\n", n_failed))
   }
 
-  aipw_boots = aipw_boots[!is.na(aipw_boots)]
-  drs_boots = drs_boots[!is.na(drs_boots)]
+  # Keep track of valid indices for all metrics
+  valid_idx = !is.na(aipw_boots)
+  aipw_boots = aipw_boots[valid_idx]
+  drs_boots = drs_boots[valid_idx]
+
+  # Also filter balance metrics if they exist
+  if (!is.null(avg_asd_boots)) {
+    avg_asd_boots = avg_asd_boots[valid_idx]
+    max_asd_boots = max_asd_boots[valid_idx]
+    ess_boots = ess_boots[valid_idx]
+  }
 
   # Compute statistics
   # AIPW
@@ -1031,6 +1122,45 @@ DR_att = function(
       drs_ci_normal[2]
     ))
     cat(sprintf("p-value:          %.4f\n", drs_pval))
+
+    # Display balance diagnostics if available
+    if (!is.null(avg_asd_boots)) {
+      # Compute balance summary statistics
+      balance_summary = list(
+        avg_asd = list(
+          mean = mean(avg_asd_boots, na.rm = TRUE),
+          sd = sd(avg_asd_boots, na.rm = TRUE),
+          min = min(avg_asd_boots, na.rm = TRUE),
+          max = max(avg_asd_boots, na.rm = TRUE)
+        ),
+        max_asd = list(
+          mean = mean(max_asd_boots, na.rm = TRUE),
+          sd = sd(max_asd_boots, na.rm = TRUE),
+          min = min(max_asd_boots, na.rm = TRUE),
+          max = max(max_asd_boots, na.rm = TRUE)
+        ),
+        ess = list(
+          mean = mean(ess_boots, na.rm = TRUE),
+          sd = sd(ess_boots, na.rm = TRUE),
+          min = min(ess_boots, na.rm = TRUE),
+          max = max(ess_boots, na.rm = TRUE)
+        )
+      )
+
+      cat("\n=== Bootstrap Balance Diagnostics ===\n")
+      cat(sprintf("Average ASD across bootstrap samples: %.4f (SD: %.4f)\n",
+                  balance_summary$avg_asd$mean, balance_summary$avg_asd$sd))
+      cat(sprintf("  Range: [%.4f, %.4f]\n",
+                  balance_summary$avg_asd$min, balance_summary$avg_asd$max))
+      cat(sprintf("Maximum ASD across bootstrap samples: %.4f (SD: %.4f)\n",
+                  balance_summary$max_asd$mean, balance_summary$max_asd$sd))
+      cat(sprintf("  Range: [%.4f, %.4f]\n",
+                  balance_summary$max_asd$min, balance_summary$max_asd$max))
+      cat(sprintf("Effective Sample Size: %.1f (SD: %.1f)\n",
+                  balance_summary$ess$mean, balance_summary$ess$sd))
+      cat(sprintf("  Range: [%.1f, %.1f]\n",
+                  balance_summary$ess$min, balance_summary$ess$max))
+    }
   }
 
   # Generate diagnostic plots
@@ -1070,6 +1200,40 @@ DR_att = function(
     par(mfrow = c(1, 1))
   }
 
+  # Create balance_diagnostics if metrics are available
+  balance_diagnostics = NULL
+  bootstrap_balance = NULL
+
+  if (!is.null(avg_asd_boots)) {
+    balance_diagnostics = list(
+      avg_asd = list(
+        mean = mean(avg_asd_boots, na.rm = TRUE),
+        sd = sd(avg_asd_boots, na.rm = TRUE),
+        min = min(avg_asd_boots, na.rm = TRUE),
+        max = max(avg_asd_boots, na.rm = TRUE)
+      ),
+      max_asd = list(
+        mean = mean(max_asd_boots, na.rm = TRUE),
+        sd = sd(max_asd_boots, na.rm = TRUE),
+        min = min(max_asd_boots, na.rm = TRUE),
+        max = max(max_asd_boots, na.rm = TRUE)
+      ),
+      ess = list(
+        mean = mean(ess_boots, na.rm = TRUE),
+        sd = sd(ess_boots, na.rm = TRUE),
+        min = min(ess_boots, na.rm = TRUE),
+        max = max(ess_boots, na.rm = TRUE)
+      )
+    )
+
+    bootstrap_balance = data.frame(
+      iteration = 1:length(avg_asd_boots),
+      avg_asd = avg_asd_boots,
+      max_asd = max_asd_boots,
+      ess = ess_boots
+    )
+  }
+
   # Return results
   return(list(
     aipw = list(
@@ -1089,7 +1253,9 @@ DR_att = function(
       bootstrap_samples = drs_boots
     ),
     n_boot = length(aipw_boots),
-    n_failed = n_failed
+    n_failed = n_failed,
+    balance_diagnostics = balance_diagnostics,
+    bootstrap_balance = bootstrap_balance
   ))
 }
 
