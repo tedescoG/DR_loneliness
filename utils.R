@@ -509,6 +509,174 @@ aipw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   ))
 }
 
+# Cross-fitting Helper ----------------------------------------------------------------####
+create_kfolds = function(data, k = 5, stratify_var = NULL, seed = 123) {
+  #' Create K folds for cross-fitting
+  #'
+  #' @param data data.frame - input data
+  #' @param k integer - number of folds
+  #' @param stratify_var character - variable name for stratification (NULL for unstratified)
+  #' @param seed integer - random seed
+  #'
+  #' @return list of k vectors containing row indices for each fold
+
+  set.seed(seed)
+  n = nrow(data)
+
+  if (is.null(stratify_var)) {
+    # Unstratified: random assignment
+    fold_ids = sample(rep(1:k, length.out = n))
+  } else {
+    # Stratified: maintain proportions within each stratum
+    strata = data[[stratify_var]]
+    unique_strata = unique(strata)
+    fold_ids = numeric(n)
+
+    for (stratum in unique_strata) {
+      stratum_idx = which(strata == stratum)
+      n_stratum = length(stratum_idx)
+      stratum_folds = sample(rep(1:k, length.out = n_stratum))
+      fold_ids[stratum_idx] = stratum_folds
+    }
+  }
+
+  # Create list of indices for each fold
+  fold_indices = lapply(1:k, function(i) which(fold_ids == i))
+  return(fold_indices)
+}
+
+# Cross-fitted AIPW -------------------------------------------------------------------####
+cf_aipw_att = function(
+  outcome,
+  treatment,
+  f.ps,
+  f.out,
+  data,
+  k = 5,
+  stratify = TRUE,
+  ps_params = list(
+    n.trees = 10000,
+    interaction.depth = 2,
+    shrinkage = 0.01,
+    bag.fraction = 0.5,
+    n.minobsinnode = 10
+  ),
+  seed = 123,
+  verbose = TRUE
+) {
+  #' Cross-fitted AIPW estimator for ATT
+  #'
+  #' @param outcome character - outcome variable name
+  #' @param treatment character - treatment variable name (binary 0/1)
+  #' @param f.ps formula - propensity score formula
+  #' @param f.out character - outcome model formula (RHS only)
+  #' @param data data.frame - dataset
+  #' @param k integer - number of folds
+  #' @param stratify logical - stratify folds by treatment
+  #' @param ps_params list - GBM hyperparameters (no internal tuning)
+  #' @param seed integer - random seed
+  #' @param verbose logical - print progress
+  #'
+  #' @return list with ATT estimate and counterfactual means
+
+  # Extract variables
+  Y = data[[outcome]]
+  Z = data[[treatment]]
+  n = nrow(data)
+  N1 = sum(Z)
+
+  # Create folds
+  stratify_var = if (stratify) treatment else NULL
+  folds = create_kfolds(data, k = k, stratify_var = stratify_var, seed = seed)
+
+  if (verbose) {
+    cat(sprintf("Cross-fitted AIPW with %d folds\n", k))
+    if (stratify) cat("Using stratified folding by treatment\n")
+  }
+
+  # Initialize storage for predictions
+  mu_hat_0 = numeric(n)
+  weights = numeric(n)
+
+  # Cross-fitting loop
+  for (fold in 1:k) {
+    if (verbose) {
+      cat(sprintf("Processing fold %d/%d...\n", fold, k))
+    }
+
+    # Split data
+    test_idx = folds[[fold]]
+    train_idx = setdiff(1:n, test_idx)
+
+    train_data = data[train_idx, ]
+    test_data = data[test_idx, ]
+
+    # Fit propensity score model on training data
+    set.seed(seed + fold) # Ensure reproducibility across folds
+    ps_fit = do.call(
+      "ps",
+      c(
+        list(
+          formula = f.ps,
+          data = train_data,
+          estimand = "ATT",
+          stop.method = "es.mean",
+          verbose = FALSE
+        ),
+        ps_params
+      )
+    )
+
+    # Predict propensity scores for test fold
+    ps_pred = predict(
+      ps_fit$gbm.obj,
+      newdata = test_data,
+      n.trees = ps_fit$desc$es.mean$n.trees,
+      type = "response"
+    )
+
+    # Compute IPT weights for test fold (ATT weights)
+    weights[test_idx] = ifelse(
+      Z[test_idx] == 1,
+      1,
+      ps_pred / (1 - ps_pred)
+    )
+
+    # Fit outcome model on control units in training data
+    control_train = train_data[train_data[[treatment]] == 0, ]
+    mu0_fit = glm(
+      formula = as.formula(paste(outcome, "~", f.out)),
+      data = control_train,
+      family = "quasibinomial",
+      control = glm.control(maxit = 50)
+    )
+
+    # Predict counterfactual outcomes for test fold
+    mu_hat_0[test_idx] = predict(
+      mu0_fit,
+      newdata = test_data,
+      type = "response"
+    )
+  }
+
+  # Compute cross-fitted AIPW estimator
+  att_est = (1 / N1) * sum((Z - (1 - Z) * weights) * (Y - mu_hat_0))
+
+  # Output
+  if (verbose) {
+    cat(sprintf("\nCross-fitted AIPW ATT: %.4f\n", att_est))
+    cat(sprintf("Mean Y(0) [counterfactual]: %.4f\n", mean(mu_hat_0[Z == 1])))
+    cat(sprintf("Mean Y(1) [observed]: %.4f\n", mean(Y[Z == 1])))
+  }
+
+  # Return results (same structure as aipw_att for compatibility)
+  return(list(
+    att = att_est,
+    mu_hat_0 = mu_hat_0,
+    mu_hat_1 = mean(Y[Z == 1])
+  ))
+}
+
 # DRS Estimator -----------------------------------------------------------------------####
 drs_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   #' Compute ATT using g-computation (doubly robust standardization)
@@ -1027,7 +1195,7 @@ DR_att = function(
         f.ps = f.ps,
         f.out = f.out,
         ps_params = ps_params,
-        seed_offset = seed
+        seed_offset = b
       )
     }
 
