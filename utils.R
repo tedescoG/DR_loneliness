@@ -11,6 +11,14 @@ library(boot)
 # ASD ----------------------------------------------------------------------------------####
 # Compute standardize absolute mean
 std.diff = function(u, z, w) {
+  #' Compute standardized absolute mean difference for covariate balance
+  #'
+  #' @param u numeric or factor - covariate to assess balance
+  #' @param z numeric - binary treatment indicator (0/1)
+  #' @param w numeric - propensity score weights
+  #'
+  #' @return numeric - absolute standardized difference (or vector for factors)
+
   # for variables other than unordered categorical variables
   # compute mean differences
   if (!is.factor(u)) {
@@ -40,6 +48,16 @@ std.diff = function(u, z, w) {
 
 # Average ASD across covariates
 es.mean = function(i, gbm1, x, z, verbose) {
+  #' Compute average absolute standardized difference across covariates
+  #'
+  #' @param i numeric - GBM iteration number
+  #' @param gbm1 gbm.object - fitted GBM model
+  #' @param x data.frame - covariate matrix
+  #' @param z numeric - binary treatment indicator (0/1)
+  #' @param verbose numeric - verbosity level (0/1/2)
+  #'
+  #' @return numeric - average standardized difference across all covariates
+
   # prints the iteration number
   i = floor(i) # makes sure that i is an integer
 
@@ -67,6 +85,16 @@ es.mean = function(i, gbm1, x, z, verbose) {
 
 # Max ASD across covariates
 es.max = function(i, gbm1, x, z, verbose) {
+  #' Compute maximum absolute standardized difference across covariates
+  #'
+  #' @param i numeric - GBM iteration number
+  #' @param gbm1 gbm.object - fitted GBM model
+  #' @param x data.frame - covariate matrix
+  #' @param z numeric - binary treatment indicator (0/1)
+  #' @param verbose numeric - verbosity level (0/1/2)
+  #'
+  #' @return numeric - maximum standardized difference across all covariates
+
   # prints the iteration number
   i = floor(i) # makes sure that i is an integer
 
@@ -95,6 +123,14 @@ es.max = function(i, gbm1, x, z, verbose) {
 # KS -----------------------------------------------------------------------------------####
 # Compute KS
 compute_KS = function(variable, treatment, weights) {
+  #' Compute Kolmogorov-Smirnov statistic for covariate balance
+  #'
+  #' @param variable numeric - covariate values
+  #' @param treatment numeric - binary treatment indicator (0/1)
+  #' @param weights numeric - propensity score weights
+  #'
+  #' @return numeric - KS statistic (max difference between weighted CDFs)
+
   treatment_data = variable[treatment == 1]
   control_data = variable[treatment == 0]
 
@@ -117,6 +153,16 @@ compute_KS = function(variable, treatment, weights) {
 
 # Average KS across covariates
 ks.mean = function(i, gbm1, x, z, verbose) {
+  #' Compute average Kolmogorov-Smirnov statistic across covariates
+  #'
+  #' @param i numeric - GBM iteration number
+  #' @param gbm1 gbm.object - fitted GBM model
+  #' @param x data.frame - covariate matrix
+  #' @param z numeric - binary treatment indicator (0/1)
+  #' @param verbose numeric - verbosity level (0/1/2)
+  #'
+  #' @return numeric - average KS statistic across all covariates
+
   i = floor(i) # Ensure i is an integer
 
   # Compute propensity score weights
@@ -136,6 +182,16 @@ ks.mean = function(i, gbm1, x, z, verbose) {
 
 # Max KS across covariates
 ks.max = function(i, gbm1, x, z, verbose) {
+  #' Compute maximum Kolmogorov-Smirnov statistic across covariates
+  #'
+  #' @param i numeric - GBM iteration number
+  #' @param gbm1 gbm.object - fitted GBM model
+  #' @param x data.frame - covariate matrix
+  #' @param z numeric - binary treatment indicator (0/1)
+  #' @param verbose numeric - verbosity level (0/1/2)
+  #'
+  #' @return numeric - maximum KS statistic across all covariates
+
   i = floor(i) # Ensure i is an integer
 
   # Compute propensity score weights
@@ -164,6 +220,17 @@ process_tune_combination = function(
   method,
   seed
 ) {
+  #' Process single hyperparameter combination for GBM tuning
+  #'
+  #' @param i integer - index of parameter combination to test
+  #' @param param_combinations data.frame - grid of parameter combinations
+  #' @param x data.frame - covariate matrix
+  #' @param y numeric - binary treatment indicator (0/1)
+  #' @param method character - balance metric ("es.mean", "es.max", "ks.mean", "ks.max")
+  #' @param seed integer - random seed for reproducibility
+  #'
+  #' @return list with combination info, best balance value, and optimal iterations
+
   combination = param_combinations[i, ]
   gbm_params = list()
 
@@ -236,15 +303,27 @@ process_tune_combination = function(
 
 # Function to tune the GBM "chasing balance" (Griffin et al. 2017, Hirano et al. 2003)
 tune.gbm = function(
-  x, # Covariate matrix/dataframe
-  y, # Treatment variable (binary: 0/1)
-  params.grid, # List of hyperparameters to test
-  method = c("es.mean", "es.max", "ks.mean", "ks.max"), # Balance metric to optimize
-  verbose = 1, # Verbosity level
-  seed = 123, # Random seed
-  n.cores = NULL, # Number of cores (NULL = auto-detect)
-  parallel = TRUE # Enable/disable parallel processing
+  x,
+  y,
+  params.grid,
+  method = c("es.mean", "es.max", "ks.mean", "ks.max"),
+  verbose = 1,
+  seed = 123,
+  n.cores = NULL,
+  parallel = TRUE
 ) {
+  #' Tune GBM hyperparameters optimizing for covariate balance
+  #'
+  #' @param x data.frame - covariate matrix
+  #' @param y numeric - binary treatment indicator (0/1)
+  #' @param params.grid list - hyperparameters to test (n.trees, shrinkage, etc.)
+  #' @param method character - balance metric to optimize
+  #' @param verbose numeric - verbosity level (0/1/2)
+  #' @param seed integer - random seed for reproducibility
+  #' @param n.cores integer - number of cores for parallel processing (NULL = auto)
+  #' @param parallel logical - enable parallel processing
+  #'
+  #' @return list with best parameters, performance, optimal iterations, and method
   # Load parallel library if requested
   if (parallel && !requireNamespace("parallel", quietly = TRUE)) {
     warning(
@@ -386,14 +465,14 @@ tune.gbm = function(
 aipw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   #' Compute AIPW estimator for Average Treatment Effect on Treated (ATT)
   #'
-  #' @param outcome
-  #' @param treatment
-  #' @param f.out
-  #' @param wgt
-  #' @param data
-  #' @param verbose
+  #' @param outcome character - name of outcome variable
+  #' @param treatment character - name of treatment variable (must be 0/1)
+  #' @param f.out character - outcome model formula (RHS only)
+  #' @param wgt character - name of weight variable (propensity scores)
+  #' @param data data.frame - dataset containing all variables
+  #' @param verbose logical - whether to print results
   #'
-  #'
+  #' @return list with ATT estimate and counterfactual means
   # Extract variables
   Y = data %>% pull(all_of(outcome))
   Z = data %>% pull(all_of(treatment))
@@ -512,8 +591,20 @@ boot_iter_resample = function(
   treated_level,
   control_level,
   f.out,
-  ps_weight_var
+  wgt
 ) {
+  #' Bootstrap iteration using resampled data with existing weights
+  #'
+  #' @param indices integer - bootstrap sample indices
+  #' @param data data.frame - full dataset
+  #' @param outcome character - name of outcome variable
+  #' @param treatment character - name of treatment variable
+  #' @param treated_level string - level indicating treated group
+  #' @param control_level string - level indicating control group
+  #' @param f.out character - outcome model formula (RHS only)
+  #' @param wgt character - name of weight variable
+  #'
+  #' @return numeric vector with AIPW and DRS estimates
   # Resample data
   boot_data = data[indices, ]
 
@@ -530,7 +621,7 @@ boot_iter_resample = function(
         outcome = outcome,
         treatment = treatment,
         f.out = f.out,
-        wgt = ps_weight_var,
+        wgt = wgt,
         data = boot_data,
         verbose = FALSE
       )
@@ -540,7 +631,7 @@ boot_iter_resample = function(
         outcome = outcome,
         treatment = treatment,
         f.out = f.out,
-        wgt = ps_weight_var,
+        wgt = wgt,
         data = boot_data,
         verbose = FALSE
       )
@@ -570,6 +661,20 @@ boot_iter_reweight = function(
   ps_params,
   seed_offset
 ) {
+  #' Bootstrap iteration with propensity score re-estimation
+  #'
+  #' @param indices integer - bootstrap sample indices
+  #' @param data data.frame - full dataset
+  #' @param outcome character - name of outcome variable
+  #' @param treatment character - name of treatment variable
+  #' @param treated_level string - level indicating treated group
+  #' @param control_level string - level indicating control group
+  #' @param f.ps formula - propensity score model formula
+  #' @param f.out character - outcome model formula (RHS only)
+  #' @param ps_params list - GBM parameters for ps() function
+  #' @param seed_offset integer - offset for random seed
+  #'
+  #' @return numeric vector with AIPW and DRS estimates
   # Resample data
   boot_data = data[indices, ]
 
@@ -648,7 +753,7 @@ DR_att = function(
   ),
   bootstrap_method = c("resample", "reweight"),
   stratified = TRUE,
-  ps_weight_var = "iptw",
+  wgt = "iptw",
   n_boot = 1000,
   seed = 123,
   verbose = TRUE,
@@ -664,11 +769,11 @@ DR_att = function(
   #' @param control_level string - level of treatment variable indicating control
   #' @param f.ps formula - propensity score model formula (only used if bootstrap_method = "reweight")
   #' @param f.out character - outcome model formula (RHS only)
-  #' @param data data.frame - dataset (must contain ps_weight_var if bootstrap_method = "resample")
+  #' @param data data.frame - dataset (must contain wgt if bootstrap_method = "resample")
   #' @param ps_params list - GBM parameters for ps() function (only used if bootstrap_method = "reweight")
   #' @param bootstrap_method character - bootstrap method: "resample" (default, faster) or "reweight" (more conservative)
   #' @param stratified logical - use stratified bootstrap to maintain treatment/control proportions (default TRUE)
-  #' @param ps_weight_var character - name of propensity score weight column in data
+  #' @param wgt character - name of propensity score weight column in data
   #' @param n_boot integer - number of bootstrap replications
   #' @param seed integer - random seed
   #' @param verbose logical - print progress
@@ -683,10 +788,10 @@ DR_att = function(
 
   # Validate inputs based on bootstrap method
   if (bootstrap_method == "resample") {
-    if (!ps_weight_var %in% names(data)) {
+    if (!wgt %in% names(data)) {
       stop(sprintf(
         "Weight variable '%s' not found in data. Available columns: %s",
-        ps_weight_var,
+        wgt,
         paste(names(data), collapse = ", ")
       ))
     }
@@ -700,7 +805,7 @@ DR_att = function(
     cat("Control level:", control_level, "\n")
     cat("Bootstrap method:", bootstrap_method, "\n")
     if (bootstrap_method == "resample") {
-      cat("PS weight variable:", ps_weight_var, "\n")
+      cat("PS weight variable:", wgt, "\n")
     }
     cat("Bootstrap replications:", n_boot, "\n")
     cat("Stratified bootstrap:", stratified, "\n")
@@ -746,7 +851,7 @@ DR_att = function(
     outcome = outcome,
     treatment = treatment,
     f.out = f.out,
-    wgt = ps_weight_var,
+    wgt = wgt,
     data = full_data,
     verbose = FALSE
   )
@@ -755,7 +860,7 @@ DR_att = function(
     outcome = outcome,
     treatment = treatment,
     f.out = f.out,
-    wgt = ps_weight_var,
+    wgt = wgt,
     data = full_data,
     verbose = FALSE
   )
@@ -820,7 +925,7 @@ DR_att = function(
         treated_level = treated_level,
         control_level = control_level,
         f.out = f.out,
-        ps_weight_var = ps_weight_var
+        wgt = wgt
       )
     } else {
       # reestimate_ps
@@ -935,7 +1040,7 @@ DR_att = function(
     # AIPW histogram
     hist(
       aipw_boots,
-      main = "AIPW Bootstrap Distribution",
+      main = sprintf("AIPW Bootstrap Distribution (%s)", bootstrap_method),
       xlab = "ATT Estimate",
       col = "lightblue",
       border = "white",
@@ -950,7 +1055,7 @@ DR_att = function(
     # DRS histogram
     hist(
       drs_boots,
-      main = "DRS Bootstrap Distribution",
+      main = sprintf("DRS Bootstrap Distribution (%s)", bootstrap_method),
       xlab = "ATT Estimate",
       col = "lightgreen",
       border = "white",
