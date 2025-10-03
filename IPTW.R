@@ -91,7 +91,7 @@ ps_inc_dec = do.call(
 (weight_summary_inc_dec = summary(ps_inc_dec))
 saveRDS(
   weight_summary_inc_dec,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/weighting_summary_inc_dec.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/weighting_summary.rds"
 )
 
 # Global graphical assessment
@@ -151,7 +151,7 @@ plot(ps_inc_dec, plots = 6) #weights
 (bal_tab = bal.table(ps_inc_dec))
 saveRDS(
   bal_tab,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/baltab_inc_dec.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/balance_table.rds"
 )
 
 # Saving weights in df
@@ -199,7 +199,7 @@ ps_inc_mix = do.call(
 (weight_summary_inc_mix = summary(ps_inc_mix))
 saveRDS(
   weight_summary_inc_mix,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/weighting_summury_inc_mix.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/weighting_summury.rds"
 )
 
 # Global graphical assessment
@@ -257,7 +257,7 @@ plot(ps_inc_mix, plots = 6) #weights
 (bal_tab = bal.table(ps_inc_mix))
 saveRDS(
   bal_tab,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/baltab_inc_mix.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/balance_table.rds"
 )
 
 # Saving weights in df

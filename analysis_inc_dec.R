@@ -89,7 +89,7 @@ results$model1_reweight = DR_att(
   data = d,
   ps_params = gbm_inc_dec,
   n_boot = 500,
-  seed = run + 1000,  # Different seed offset for reweight method
+  seed = run + 1000, # Different seed offset for reweight method
   verbose = TRUE,
   parallel = TRUE,
   n_cores = NULL,
@@ -287,7 +287,12 @@ lines(
   col = "red",
   lwd = 2
 )
-legend("topright", legend = c("Resample", "Reweight"), col = c("blue", "red"), lwd = 2)
+legend(
+  "topright",
+  legend = c("Resample", "Reweight"),
+  col = c("blue", "red"),
+  lwd = 2
+)
 
 # Overlay distributions for Model 1: DRS Resample vs Reweight
 plot(
@@ -306,7 +311,12 @@ lines(
   col = "red",
   lwd = 2
 )
-legend("topright", legend = c("Resample", "Reweight"), col = c("blue", "red"), lwd = 2)
+legend(
+  "topright",
+  legend = c("Resample", "Reweight"),
+  col = c("blue", "red"),
+  lwd = 2
+)
 
 # Comparison across models for AIPW (Resample) - Increase vs Decrease
 plot(
@@ -460,17 +470,17 @@ cat("\n\nSAVING RESULTS:\n")
 cat("---------------\n")
 
 # Save all individual results
-saveRDS(results$model1_resample, "results/model1_resample_inc_dec.rds")
-saveRDS(results$model1_reweight, "results/model1_reweight_inc_dec.rds")
-saveRDS(results$model2_resample, "results/model2_resample_inc_dec.rds")
-saveRDS(results$model2_reweight, "results/model2_reweight_inc_dec.rds")
-saveRDS(results$model3_resample, "results/model3_resample_inc_dec.rds")
-saveRDS(results$model3_reweight, "results/model3_reweight_inc_dec.rds")
-saveRDS(results$model4_resample, "results/model4_resample_inc_dec.rds")
-saveRDS(results$model4_reweight, "results/model4_reweight_inc_dec.rds")
+saveRDS(results$model1_resample, "results/outcome/inc_dec/model1_resample.rds")
+saveRDS(results$model1_reweight, "results/outcome/inc_dec/model1_reweight.rds")
+saveRDS(results$model2_resample, "results/outcome/inc_dec/model2_resample.rds")
+saveRDS(results$model2_reweight, "results/outcome/inc_dec/model2_reweight.rds")
+saveRDS(results$model3_resample, "results/outcome/inc_dec/model3_resample.rds")
+saveRDS(results$model3_reweight, "results/outcome/inc_dec/model3_reweight.rds")
+saveRDS(results$model4_resample, "results/outcome/inc_dec/model4_resample.rds")
+saveRDS(results$model4_reweight, "results/outcome/inc_dec/model4_reweight.rds")
 
 # Save entire results list
-saveRDS(results, "results/all_results_inc_dec.rds")
+saveRDS(results, "results/outcome/inc_dec/all_results.rds")
 
 # Create comprehensive summary table with balance diagnostics
 summary_table = data.frame(
@@ -578,67 +588,140 @@ summary_table = data.frame(
   ),
   # Add balance diagnostics
   Avg_ASD = c(
-    ifelse(!is.null(results$model1_resample$bootstrap_balance$avg_asd$mean),
-           results$model1_resample$bootstrap_balance$avg_asd$mean, NA),
-    ifelse(!is.null(results$model1_reweight$bootstrap_balance$avg_asd$mean),
-           results$model1_reweight$bootstrap_balance$avg_asd$mean, NA),
-    ifelse(!is.null(results$model2_resample$bootstrap_balance$avg_asd$mean),
-           results$model2_resample$bootstrap_balance$avg_asd$mean, NA),
-    ifelse(!is.null(results$model2_reweight$bootstrap_balance$avg_asd$mean),
-           results$model2_reweight$bootstrap_balance$avg_asd$mean, NA),
-    ifelse(!is.null(results$model3_resample$bootstrap_balance$avg_asd$mean),
-           results$model3_resample$bootstrap_balance$avg_asd$mean, NA),
-    ifelse(!is.null(results$model3_reweight$bootstrap_balance$avg_asd$mean),
-           results$model3_reweight$bootstrap_balance$avg_asd$mean, NA),
-    ifelse(!is.null(results$model4_resample$bootstrap_balance$avg_asd$mean),
-           results$model4_resample$bootstrap_balance$avg_asd$mean, NA),
-    ifelse(!is.null(results$model4_reweight$bootstrap_balance$avg_asd$mean),
-           results$model4_reweight$bootstrap_balance$avg_asd$mean, NA)
+    ifelse(
+      !is.null(results$model1_resample$bootstrap_balance$avg_asd$mean),
+      results$model1_resample$bootstrap_balance$avg_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model1_reweight$bootstrap_balance$avg_asd$mean),
+      results$model1_reweight$bootstrap_balance$avg_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model2_resample$bootstrap_balance$avg_asd$mean),
+      results$model2_resample$bootstrap_balance$avg_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model2_reweight$bootstrap_balance$avg_asd$mean),
+      results$model2_reweight$bootstrap_balance$avg_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model3_resample$bootstrap_balance$avg_asd$mean),
+      results$model3_resample$bootstrap_balance$avg_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model3_reweight$bootstrap_balance$avg_asd$mean),
+      results$model3_reweight$bootstrap_balance$avg_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model4_resample$bootstrap_balance$avg_asd$mean),
+      results$model4_resample$bootstrap_balance$avg_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model4_reweight$bootstrap_balance$avg_asd$mean),
+      results$model4_reweight$bootstrap_balance$avg_asd$mean,
+      NA
+    )
   ),
   Max_ASD = c(
-    ifelse(!is.null(results$model1_resample$bootstrap_balance$max_asd$mean),
-           results$model1_resample$bootstrap_balance$max_asd$mean, NA),
-    ifelse(!is.null(results$model1_reweight$bootstrap_balance$max_asd$mean),
-           results$model1_reweight$bootstrap_balance$max_asd$mean, NA),
-    ifelse(!is.null(results$model2_resample$bootstrap_balance$max_asd$mean),
-           results$model2_resample$bootstrap_balance$max_asd$mean, NA),
-    ifelse(!is.null(results$model2_reweight$bootstrap_balance$max_asd$mean),
-           results$model2_reweight$bootstrap_balance$max_asd$mean, NA),
-    ifelse(!is.null(results$model3_resample$bootstrap_balance$max_asd$mean),
-           results$model3_resample$bootstrap_balance$max_asd$mean, NA),
-    ifelse(!is.null(results$model3_reweight$bootstrap_balance$max_asd$mean),
-           results$model3_reweight$bootstrap_balance$max_asd$mean, NA),
-    ifelse(!is.null(results$model4_resample$bootstrap_balance$max_asd$mean),
-           results$model4_resample$bootstrap_balance$max_asd$mean, NA),
-    ifelse(!is.null(results$model4_reweight$bootstrap_balance$max_asd$mean),
-           results$model4_reweight$bootstrap_balance$max_asd$mean, NA)
+    ifelse(
+      !is.null(results$model1_resample$bootstrap_balance$max_asd$mean),
+      results$model1_resample$bootstrap_balance$max_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model1_reweight$bootstrap_balance$max_asd$mean),
+      results$model1_reweight$bootstrap_balance$max_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model2_resample$bootstrap_balance$max_asd$mean),
+      results$model2_resample$bootstrap_balance$max_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model2_reweight$bootstrap_balance$max_asd$mean),
+      results$model2_reweight$bootstrap_balance$max_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model3_resample$bootstrap_balance$max_asd$mean),
+      results$model3_resample$bootstrap_balance$max_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model3_reweight$bootstrap_balance$max_asd$mean),
+      results$model3_reweight$bootstrap_balance$max_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model4_resample$bootstrap_balance$max_asd$mean),
+      results$model4_resample$bootstrap_balance$max_asd$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model4_reweight$bootstrap_balance$max_asd$mean),
+      results$model4_reweight$bootstrap_balance$max_asd$mean,
+      NA
+    )
   ),
   Avg_ESS = c(
-    ifelse(!is.null(results$model1_resample$bootstrap_balance$ess$mean),
-           results$model1_resample$bootstrap_balance$ess$mean, NA),
-    ifelse(!is.null(results$model1_reweight$bootstrap_balance$ess$mean),
-           results$model1_reweight$bootstrap_balance$ess$mean, NA),
-    ifelse(!is.null(results$model2_resample$bootstrap_balance$ess$mean),
-           results$model2_resample$bootstrap_balance$ess$mean, NA),
-    ifelse(!is.null(results$model2_reweight$bootstrap_balance$ess$mean),
-           results$model2_reweight$bootstrap_balance$ess$mean, NA),
-    ifelse(!is.null(results$model3_resample$bootstrap_balance$ess$mean),
-           results$model3_resample$bootstrap_balance$ess$mean, NA),
-    ifelse(!is.null(results$model3_reweight$bootstrap_balance$ess$mean),
-           results$model3_reweight$bootstrap_balance$ess$mean, NA),
-    ifelse(!is.null(results$model4_resample$bootstrap_balance$ess$mean),
-           results$model4_resample$bootstrap_balance$ess$mean, NA),
-    ifelse(!is.null(results$model4_reweight$bootstrap_balance$ess$mean),
-           results$model4_reweight$bootstrap_balance$ess$mean, NA)
+    ifelse(
+      !is.null(results$model1_resample$bootstrap_balance$ess$mean),
+      results$model1_resample$bootstrap_balance$ess$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model1_reweight$bootstrap_balance$ess$mean),
+      results$model1_reweight$bootstrap_balance$ess$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model2_resample$bootstrap_balance$ess$mean),
+      results$model2_resample$bootstrap_balance$ess$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model2_reweight$bootstrap_balance$ess$mean),
+      results$model2_reweight$bootstrap_balance$ess$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model3_resample$bootstrap_balance$ess$mean),
+      results$model3_resample$bootstrap_balance$ess$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model3_reweight$bootstrap_balance$ess$mean),
+      results$model3_reweight$bootstrap_balance$ess$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model4_resample$bootstrap_balance$ess$mean),
+      results$model4_resample$bootstrap_balance$ess$mean,
+      NA
+    ),
+    ifelse(
+      !is.null(results$model4_reweight$bootstrap_balance$ess$mean),
+      results$model4_reweight$bootstrap_balance$ess$mean,
+      NA
+    )
   )
 )
 
 print(summary_table)
 
 # Save as CSV
-write.csv(summary_table, "results/bootstrap_DR_summary_inc_dec.csv", row.names = FALSE)
+write.csv(
+  summary_table,
+  "results/outcome/inc_dec/bootstrap_DR_summary.csv",
+  row.names = FALSE
+)
 
 cat("\nResults saved successfully!\n")
-cat("- Individual results: results/model*_{resample|reweight}_inc_dec.rds\n")
-cat("- All results: results/all_results_inc_dec.rds\n")
-cat("- Summary table: results/bootstrap_DR_summary_inc_dec.csv\n")
