@@ -367,8 +367,6 @@ tune.gbm = function(
   # Match method argument
   method = match.arg(method)
 
-  RNGkind("L'Ecuyer-CMRG")
-  set.seed(seed)
   # Execute parallel or sequential processing
   if (parallel && nrow(param_combinations) > 1) {
     # Parallel processing
@@ -385,7 +383,7 @@ tune.gbm = function(
         )
       },
       mc.cores = n.cores,
-      mc.set.seed = TRUE
+      mc.set.seed = F
     )
   } else {
     # Sequential processing
@@ -1044,8 +1042,7 @@ DR_att = function(
     boot_results = parallel::mclapply(
       1:n_boot,
       boot_fn,
-      mc.cores = n_cores,
-      mc.set.seed = FALSE # Managed by L'Ecuyer-CMRG seeding stream
+      mc.cores = n_cores
     )
   } else {
     boot_results = lapply(1:n_boot, boot_fn)

@@ -16,7 +16,7 @@ params_ps = list(
 # Grid of hyperparameters for GBM
 gbm.grid = list(
   distribution = c("bernoulli"),
-  n.trees = c(5000, 10000),
+  n.trees = c(5000, 1000),
   interaction.depth = c(1, 2),
   shrinkage = c(0.001, 0.005, 0.01, 0.05),
   bag.fraction = c(.3, .5, 1, .75),
@@ -57,7 +57,6 @@ inc_dec = subset(d, remote_contact %in% c("increase", "decrease")) %>%
 
 
 # gbm optimization
-set.seed(run)
 system.time({
   tuned_gbm = tune.gbm(
     x = inc_dec %>%
@@ -165,7 +164,6 @@ inc_mix = subset(d, remote_contact %in% c("increase", "mix")) %>%
 
 
 # gbm optimization
-set.seed(run)
 system.time({
   tuned_gbm = tune.gbm(
     x = inc_mix %>%
