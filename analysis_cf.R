@@ -9,7 +9,7 @@ run = 123
 source("utils.R")
 
 # Load data
-d = readRDS("data/data_iptw.rds")
+d = readRDS("data/data_iptw2.rds")
 
 # Define propensity score formula
 ps_formula = as.formula(
@@ -21,14 +21,14 @@ ps_formula = as.formula(
       income +
       marital +
       coliving +
-      change_res +
-      kinless +
+      #change_res +
+      #kinless +
       health_pre +
       chronic +
       death_due_covid +
       ppl_infected +
       income_loss +
-      job_loss +
+      #job_loss +
       neighborhood +
       baseline_depr +
       baseline_lone
@@ -42,9 +42,9 @@ outcome_formula_2 = "baseline_lone"
 outcome_formula_3 = "baseline_lone + baseline_depr"
 
 outcome_formula_4 = "baseline_lone + baseline_depr + female + age_cat + edu +
-                     emp_status + income + marital + coliving + change_res +
-                     kinless + health_pre + chronic + death_due_covid +
-                     ppl_infected + income_loss + job_loss + neighborhood"
+                     emp_status + income + marital + coliving + health_pre + 
+                     chronic + death_due_covid +
+                     ppl_infected + income_loss + neighborhood"
 
 # Tuned parameters for GBM - Increase vs Decrease
 gbm_inc_dec = readRDS("results/weighting/inc_dec_params.rds")

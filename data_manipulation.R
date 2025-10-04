@@ -155,7 +155,7 @@ neighborhood = factor(
 
 # OUTCOME: severe lonliness
 table(df$C3, useNA = "ifany")
-severe_loneliness = ifelse(df$C3 == 4, 1, 0)
+severe_loneliness = ifelse(df$C3 %in% c(4, 3), 1, 0)
 table(severe_loneliness)
 
 
@@ -206,14 +206,14 @@ data_clean = data.frame(
   income,
   marital,
   coliving,
-  change_res,
-  kinless,
+  #change_res,
+  #kinless,
   health_pre,
   chronic,
   death_due_covid,
   ppl_infected,
   income_loss,
-  job_loss,
+  #job_loss,
   neighborhood,
   baseline_depr,
   baseline_lone,
@@ -229,5 +229,5 @@ data_clean = data.frame(
 # Save data in .rds
 saveRDS(
   data_clean,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_clean.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_clean2.rds"
 )

@@ -10,21 +10,21 @@ params_ps = list(
   estimand = "ATT",
   stop.method = c("es.mean"),
   verbose = F,
-  n.grid = 25
+  n.grid = 50
 )
 
 # Grid of hyperparameters for GBM
 gbm.grid = list(
   distribution = c("bernoulli"),
-  n.trees = 5000,
-  interaction.depth = 1,
+  n.trees = c(5000, 10000),
+  interaction.depth = c(1),
   shrinkage = seq(0.01, 0.05, by = 0.005),
   bag.fraction = c(.3, .5, 1, .75),
   n.minobsinnode = c(10, 15)
 )
 
 # Import data
-d = readRDS("~/Desktop/Research/Thesis/DR_loneliness/data/data_clean.rds")
+d = readRDS("~/Desktop/Research/Thesis/DR_loneliness/data/data_clean2.rds")
 # Define ps function
 ps_formula = as.formula(
   remote_contact ~
@@ -35,14 +35,14 @@ ps_formula = as.formula(
       income +
       marital +
       coliving +
-      change_res +
-      kinless +
+      #change_res +
+      #kinless +
       health_pre +
       chronic +
       death_due_covid +
       ppl_infected +
       income_loss +
-      job_loss +
+      #job_loss +
       neighborhood +
       baseline_depr +
       baseline_lone
@@ -271,5 +271,5 @@ d$iptw = ifelse(
 
 saveRDS(
   d,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_iptw.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_iptw2.rds"
 )

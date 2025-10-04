@@ -9,6 +9,7 @@ library(marginaleffects)
 library(boot)
 library(rsample)
 
+
 # ASD ----------------------------------------------------------------------------------####
 # Compute standardize absolute mean
 std.diff = function(u, z, w) {
@@ -1652,7 +1653,8 @@ boot_iter_crossfit = function(
       boot_data[[treatment]] = as.numeric(
         boot_data[[treatment]] == treated_level
       )
-
+      #print(class(boot_data[[treatment]]))
+      #print(unique(boot_data[[treatment]]))
       # Extract treatment and outcome
       Y = boot_data[[outcome]]
       Z = boot_data[[treatment]]
@@ -1661,7 +1663,11 @@ boot_iter_crossfit = function(
       # Create K folds with stratification
       stratify_var = if (stratify) treatment else NULL
       set.seed(seed_offset)
-      folds = vfold_cv(boot_data, v = k, strata = all_of(stratify_var))
+      folds = vfold_cv(
+        boot_data,
+        v = k,
+        strata = all_of(stratify_var)
+      )
 
       # Initialize storage for fold-specific estimates
       mu_hat_0 = numeric(n)
@@ -1677,6 +1683,7 @@ boot_iter_crossfit = function(
 
         train_data = boot_data[train_idx, ]
         test_data = boot_data[test_idx, ]
+        #cat("zero var:", nearZeroVar(train_data), "\n")
 
         # Fit propensity score model on K-1 folds
         set.seed(seed_offset) # Fixed seed for GBM within bootstrap
@@ -1702,13 +1709,18 @@ boot_iter_crossfit = function(
           type = "response"
         )
 
+        alpha = 0.05
+        ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
+
+        #print(max(ps_pred[Z[test_idx] == 0]))
+        #print(min(ps_pred[Z[test_idx] == 0]))
         # Compute IPT weights for held-out fold (ATT weights)
         weights[test_idx] = ifelse(
           Z[test_idx] == 1,
           1,
           ps_pred / (1 - ps_pred)
         )
-
+        #print(max(weights[Z[test_idx] == 0]))
         # Fit outcome model on control units from K-1 folds
         control_train = train_data[train_data[[treatment]] == 0, ]
         mu0_fit = glm(
