@@ -528,7 +528,8 @@ cf_aipw_att = function(
     n.minobsinnode = 10
   ),
   seed = 123,
-  verbose = TRUE
+  verbose = TRUE,
+  alpha = 0
 ) {
   #' Cross-fitted AIPW estimator for ATT
   #'
@@ -542,6 +543,7 @@ cf_aipw_att = function(
   #' @param gbm_params list - GBM hyperparameters (no internal tuning)
   #' @param seed integer - random seed
   #' @param verbose logical - print progress
+  #' @param alpha numeric - propensity score truncation level (0 = no truncation)
   #'
   #' @return list with ATT estimate and counterfactual means
 
@@ -603,8 +605,10 @@ cf_aipw_att = function(
       type = "response"
     )
 
-    alpha = 0.05
-    ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
+    # Truncate propensity scores if alpha > 0
+    if (alpha > 0) {
+      ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
+    }
 
     # Compute IPT weights for held-out fold (ATT weights)
     weights[test_idx] = ifelse(
@@ -743,7 +747,8 @@ cf_drs_att = function(
     n.minobsinnode = 10
   ),
   seed = 123,
-  verbose = TRUE
+  verbose = TRUE,
+  alpha = 0
 ) {
   #' Cross-fitted DRS (Doubly Robust Standardization) ATT estimator
   #'
@@ -760,6 +765,7 @@ cf_drs_att = function(
   #' @param gbm_params list - GBM parameters for ps() function
   #' @param seed integer - random seed for fold creation
   #' @param verbose logical - print progress and results
+  #' @param alpha numeric - propensity score truncation level (0 = no truncation)
   #'
   #' @return list with att estimate and fold-specific estimates
 
@@ -830,8 +836,10 @@ cf_drs_att = function(
       type = "response"
     )
 
-    alpha = 0.05
-    ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
+    # Truncate propensity scores if alpha > 0
+    if (alpha > 0) {
+      ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
+    }
 
     # Compute ATT weights for held-out fold
     weights[test_idx] = ifelse(
@@ -1629,7 +1637,8 @@ boot_iter_crossfit = function(
   gbm_params,
   k = 5,
   stratify = TRUE,
-  seed_offset
+  seed_offset,
+  alpha = 0
 ) {
   #' Bootstrap iteration with K-fold cross-fitting for both AIPW and DRS
   #'
@@ -1645,6 +1654,7 @@ boot_iter_crossfit = function(
   #' @param k integer - number of cross-fitting folds
   #' @param stratify logical - stratify folds by treatment
   #' @param seed_offset integer - offset for random seed
+  #' @param alpha numeric - propensity score truncation level (0 = no truncation)
   #'
   #' @return numeric vector with AIPW, DRS estimates and balance metrics
 
@@ -1715,8 +1725,10 @@ boot_iter_crossfit = function(
           type = "response"
         )
 
-        alpha = 0.05
-        ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
+        # Truncate propensity scores if alpha > 0
+        if (alpha > 0) {
+          ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
+        }
 
         #print(max(ps_pred[Z[test_idx] == 0]))
         #print(min(ps_pred[Z[test_idx] == 0]))
@@ -1886,7 +1898,8 @@ cf_DR_att = function(
   verbose = TRUE,
   parallel = TRUE,
   n_cores = NULL,
-  plot_diagnostics = TRUE
+  plot_diagnostics = TRUE,
+  alpha = 0
 ) {
   #' Cross-Fitted Bootstrap Doubly Robust ATT Estimation
   #'
@@ -1910,6 +1923,7 @@ cf_DR_att = function(
   #' @param parallel logical - use parallel processing
   #' @param n_cores integer - number of cores (NULL = auto-detect)
   #' @param plot_diagnostics logical - generate diagnostic plots
+  #' @param alpha numeric - propensity score truncation level (0 = no truncation)
   #'
   #' @return list with estimates, SEs, CIs, p-values, and bootstrap samples
 
@@ -1969,7 +1983,8 @@ cf_DR_att = function(
     stratify = stratified,
     gbm_params = gbm_params,
     seed = seed,
-    verbose = FALSE
+    verbose = FALSE,
+    alpha = alpha
   )
 
   # Use cf_drs_att for DRS point estimate
@@ -1983,7 +1998,8 @@ cf_DR_att = function(
     stratify = stratified,
     gbm_params = gbm_params,
     seed = seed,
-    verbose = FALSE
+    verbose = FALSE,
+    alpha = alpha
   )
 
   if (verbose) {
@@ -2049,7 +2065,8 @@ cf_DR_att = function(
       gbm_params = gbm_params,
       k = k,
       stratify = stratified,
-      seed_offset = seed + b
+      seed_offset = seed + b,
+      alpha = alpha
     )
 
     if (!parallel && verbose) {
