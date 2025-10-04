@@ -603,6 +603,9 @@ cf_aipw_att = function(
       type = "response"
     )
 
+    alpha = 0.05
+    ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
+
     # Compute IPT weights for held-out fold (ATT weights)
     weights[test_idx] = ifelse(
       Z[test_idx] == 1,
@@ -826,6 +829,9 @@ cf_drs_att = function(
       n.trees = ps_fit$desc$es.mean$n.trees,
       type = "response"
     )
+
+    alpha = 0.05
+    ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
 
     # Compute ATT weights for held-out fold
     weights[test_idx] = ifelse(
