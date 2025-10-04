@@ -7,6 +7,7 @@ library(twang)
 library(survey)
 library(marginaleffects)
 library(boot)
+library(rsample)
 
 # ASD ----------------------------------------------------------------------------------####
 # Compute standardize absolute mean
@@ -537,7 +538,7 @@ cf_aipw_att = function(
   #' @param data data.frame - dataset
   #' @param k integer - number of folds
   #' @param stratify logical - stratify folds by treatment
-  #' @param ps_params list - GBM hyperparameters (no internal tuning)
+  #' @param gbm_params list - GBM hyperparameters (no internal tuning)
   #' @param seed integer - random seed
   #' @param verbose logical - print progress
   #'
@@ -552,7 +553,7 @@ cf_aipw_att = function(
   # Create folds
   stratify_var = if (stratify) treatment else NULL
   set.seed(seed)
-  folds = vfold_cv(data, v = k, strata = stratify_var)
+  folds = vfold_cv(data, v = k, strata = all_of(stratify_var))
 
   if (verbose) {
     cat(sprintf("Cross-fitted AIPW with %d folds\n", k))
@@ -730,7 +731,7 @@ cf_drs_att = function(
   data,
   k = 5,
   stratify = TRUE,
-  ps_params = list(
+  gbm_params = list(
     n.trees = 10000,
     interaction.depth = 2,
     shrinkage = 0.01,
@@ -752,7 +753,7 @@ cf_drs_att = function(
   #' @param data data.frame - dataset (treatment should already be 0/1 numeric)
   #' @param k integer - number of cross-fitting folds
   #' @param stratify logical - stratify folds by treatment status
-  #' @param ps_params list - GBM parameters for ps() function
+  #' @param gbm_params list - GBM parameters for ps() function
   #' @param seed integer - random seed for fold creation
   #' @param verbose logical - print progress and results
   #'
@@ -778,7 +779,7 @@ cf_drs_att = function(
   # Create K folds
   stratify_var = if (stratify) treatment else NULL
   set.seed(seed)
-  folds = vfold_cv(data, v = k, strata = stratify_var, see)
+  folds = vfold_cv(data, v = k, strata = all_of(stratify_var))
 
   # Initialize storage
   weights = numeric(n)
@@ -813,7 +814,7 @@ cf_drs_att = function(
           stop.method = "es.mean",
           verbose = FALSE
         ),
-        ps_params
+        gbm_params
       )
     )
 
@@ -945,9 +946,9 @@ boot_iter_resample = function(
   )
 
   # Compute balance diagnostics using our std.diff function
-  avg_asd = NA
-  max_asd = NA
-  ess = NA
+  avg_asd = NA_real_
+  max_asd = NA_real_
+  ess = NA_real_
 
   tryCatch(
     {
@@ -1009,7 +1010,7 @@ boot_iter_reweight = function(
   control_level,
   f.ps,
   f.out,
-  ps_params,
+  gbm_params,
   seed_offset
 ) {
   #' Bootstrap iteration with propensity score re-estimation
@@ -1022,7 +1023,7 @@ boot_iter_reweight = function(
   #' @param control_level string - level indicating control group
   #' @param f.ps formula - propensity score model formula
   #' @param f.out character - outcome model formula (RHS only)
-  #' @param ps_params list - GBM parameters for ps() function
+  #' @param gbm_params list - GBM parameters for ps() function
   #' @param seed_offset integer - offset for random seed
   #'
   #' @return numeric vector with AIPW, DRS estimates and balance metrics
@@ -1046,7 +1047,7 @@ boot_iter_reweight = function(
         stop.method = "es.mean",
         verbose = FALSE
       ),
-      ps_params
+      gbm_params
     )
   )
 
@@ -1074,9 +1075,9 @@ boot_iter_reweight = function(
   )
 
   # Compute balance diagnostics using our std.diff function
-  avg_asd = NA
-  max_asd = NA
-  ess = NA
+  avg_asd = NA_real_
+  max_asd = NA_real_
+  ess = NA_real_
 
   tryCatch(
     {
@@ -1140,7 +1141,7 @@ DR_att = function(
   f.ps,
   f.out,
   data,
-  ps_params = list(
+  gbm_params = list(
     n.trees = 10000,
     interaction.depth = 2,
     shrinkage = 0.01,
@@ -1166,7 +1167,7 @@ DR_att = function(
   #' @param f.ps formula - propensity score model formula (only used if bootstrap_method = "reweight")
   #' @param f.out character - outcome model formula (RHS only)
   #' @param data data.frame - dataset (must contain wgt if bootstrap_method = "resample")
-  #' @param ps_params list - GBM parameters for ps() function (only used if bootstrap_method = "reweight")
+  #' @param gbm_params list - GBM parameters for ps() function (only used if bootstrap_method = "reweight")
   #' @param bootstrap_method character - bootstrap method: "resample" (default, faster) or "reweight" (more conservative)
   #' @param stratified logical - use stratified bootstrap to maintain treatment/control proportions (default TRUE)
   #' @param wgt character - name of propensity score weight column in data
@@ -1339,7 +1340,7 @@ DR_att = function(
         control_level = control_level,
         f.ps = f.ps,
         f.out = f.out,
-        ps_params = ps_params,
+        gbm_params = gbm_params,
         seed_offset = b
       )
     }
@@ -1618,7 +1619,7 @@ boot_iter_crossfit = function(
   control_level,
   f.ps,
   f.out,
-  ps_params,
+  gbm_params,
   k = 5,
   stratify = TRUE,
   seed_offset
@@ -1633,200 +1634,215 @@ boot_iter_crossfit = function(
   #' @param control_level string - level indicating control group
   #' @param f.ps formula - propensity score model formula
   #' @param f.out character - outcome model formula (RHS only)
-  #' @param ps_params list - GBM parameters for ps() function
+  #' @param gbm_params list - GBM parameters for ps() function
   #' @param k integer - number of cross-fitting folds
   #' @param stratify logical - stratify folds by treatment
   #' @param seed_offset integer - offset for random seed
   #'
   #' @return numeric vector with AIPW, DRS estimates and balance metrics
 
-  # Resample data
-  boot_data = data[indices, ]
-  n = nrow(boot_data)
-
-  # Create binary treatment indicator
-  boot_data[[treatment]] = as.numeric(
-    boot_data[[treatment]] == treated_level
-  )
-
-  # Extract treatment and outcome
-  Y = boot_data[[outcome]]
-  Z = boot_data[[treatment]]
-  N1 = sum(Z)
-
-  # Create K folds with stratification
-  stratify_var = if (stratify) treatment else NULL
-  set.seed(seed_offset)
-  folds = vfold_cv(boot_data, v = k, strata = stratify_var)
-
-  # Initialize storage for fold-specific estimates
-  mu_hat_0 = numeric(n)
-  weights = numeric(n)
-  aipw_fold_estimates = numeric(k)
-  drs_fold_estimates = numeric(k)
-
-  # Cross-fitting loop
-  for (fold in 1:k) {
-    # Split data: predict on fold k, train on K-1 folds
-    test_idx = folds$splits[[fold]]$in_id
-    train_idx = setdiff(1:n, test_idx)
-
-    train_data = boot_data[train_idx, ]
-    test_data = boot_data[test_idx, ]
-
-    # Fit propensity score model on K-1 folds
-    set.seed(seed_offset) # Fixed seed for GBM within bootstrap
-    ps_fit = do.call(
-      "ps",
-      c(
-        list(
-          formula = f.ps,
-          data = train_data,
-          estimand = "ATT",
-          stop.method = "es.mean",
-          verbose = FALSE
-        ),
-        ps_params
-      )
-    )
-
-    # Predict propensity scores for held-out fold k
-    ps_pred = predict(
-      ps_fit$gbm.obj,
-      newdata = test_data,
-      n.trees = ps_fit$desc$es.mean$n.trees,
-      type = "response"
-    )
-
-    # Compute IPT weights for held-out fold (ATT weights)
-    weights[test_idx] = ifelse(
-      Z[test_idx] == 1,
-      1,
-      ps_pred / (1 - ps_pred)
-    )
-
-    # Fit outcome model on control units from K-1 folds
-    control_train = train_data[train_data[[treatment]] == 0, ]
-    mu0_fit = glm(
-      formula = as.formula(paste(outcome, "~", f.out)),
-      data = control_train,
-      family = "quasibinomial",
-      control = glm.control(maxit = 50)
-    )
-
-    # Predict counterfactual outcomes for held-out fold k
-    mu_hat_0[test_idx] = predict(
-      mu0_fit,
-      newdata = test_data,
-      type = "response"
-    )
-
-    # Compute fold-specific AIPW estimate
-    Y_k = Y[test_idx]
-    Z_k = Z[test_idx]
-    weights_k = weights[test_idx]
-    mu_hat_0_k = mu_hat_0[test_idx]
-    N1_k = sum(Z_k)
-
-    aipw_fold_estimates[fold] = (1 / N1_k) *
-      sum((Z_k - (1 - Z_k) * weights_k) * (Y_k - mu_hat_0_k))
-
-    # Compute fold-specific DRS estimate
-    # Create weighted survey design for fold k
-    test_data_wgt = test_data
-    test_data_wgt$ps_wgt = weights[test_idx]
-
-    weighted_design = svydesign(
-      ids = ~1,
-      weights = ~ps_wgt,
-      data = test_data_wgt
-    )
-
-    # Build outcome model formula
-    if (f.out != "1") {
-      formula_str = paste(outcome, "~", treatment, "+", f.out)
-    } else {
-      formula_str = paste(outcome, "~", treatment)
-    }
-
-    # Fit weighted outcome model on fold k
-    fit = svyglm(
-      formula = as.formula(formula_str),
-      family = 'quasibinomial',
-      design = weighted_design
-    )
-
-    # Predict counterfactuals for treated units in fold k
-    treated_k = test_data_wgt[test_data_wgt[[treatment]] == 1, ]
-    counterfactual_k = treated_k
-    counterfactual_k[[treatment]] = 0
-
-    mu0_drs_k = predict(fit, newdata = counterfactual_k, type = "response")
-    mu_hat_0_drs = mean(mu0_drs_k)
-    mu_hat_1_drs = mean(Y_k[Z_k == 1])
-
-    drs_fold_estimates[fold] = mu_hat_1_drs - mu_hat_0_drs
-  }
-
-  # Average across folds for final bootstrap estimates
-  aipw_est = mean(aipw_fold_estimates)
-  drs_est = mean(drs_fold_estimates)
-
-  # Compute balance diagnostics using full bootstrap sample
-  avg_asd = NA
-  max_asd = NA
-  ess = NA
-
+  # Wrap entire function in tryCatch to handle failures gracefully
   tryCatch(
     {
-      # Extract all covariates (exclude treatment, outcome)
-      covariate_cols = setdiff(
-        names(boot_data),
-        c(treatment, outcome)
+      # Resample data
+      boot_data = data[indices, ]
+      n = nrow(boot_data)
+
+      # Create binary treatment indicator
+      boot_data[[treatment]] = as.numeric(
+        boot_data[[treatment]] == treated_level
       )
 
-      if (length(covariate_cols) > 0) {
-        covariates = boot_data[, covariate_cols, drop = FALSE]
+      # Extract treatment and outcome
+      Y = boot_data[[outcome]]
+      Z = boot_data[[treatment]]
+      N1 = sum(Z)
 
-        # Ensure treatment is numeric 0/1
-        treat_vec = as.numeric(boot_data[[treatment]])
+      # Create K folds with stratification
+      stratify_var = if (stratify) treatment else NULL
+      set.seed(seed_offset)
+      folds = vfold_cv(boot_data, v = k, strata = all_of(stratify_var))
 
-        # Ensure weights are numeric
-        weights_vec = as.numeric(weights)
+      # Initialize storage for fold-specific estimates
+      mu_hat_0 = numeric(n)
+      weights = numeric(n)
+      aipw_fold_estimates = numeric(k)
+      drs_fold_estimates = numeric(k)
 
-        # Check for valid weights
-        if (all(is.finite(weights_vec)) && all(weights_vec > 0)) {
-          # Compute standardized differences
-          std_diffs = unlist(sapply(
-            covariates,
-            std.diff,
-            z = treat_vec,
-            w = weights_vec
-          ))
-          std_diffs = std_diffs[!is.na(std_diffs)]
+      # Cross-fitting loop
+      for (fold in 1:k) {
+        # Split data: predict on fold k, train on K-1 folds
+        test_idx = folds$splits[[fold]]$in_id
+        train_idx = setdiff(1:n, test_idx)
 
-          if (length(std_diffs) > 0) {
-            avg_asd = mean(std_diffs)
-            max_asd = max(std_diffs)
-          }
+        train_data = boot_data[train_idx, ]
+        test_data = boot_data[test_idx, ]
 
-          # Compute effective sample size
-          ess = sum(weights_vec)^2 / sum(weights_vec^2)
+        # Fit propensity score model on K-1 folds
+        set.seed(seed_offset) # Fixed seed for GBM within bootstrap
+        ps_fit = do.call(
+          "ps",
+          c(
+            list(
+              formula = f.ps,
+              data = train_data,
+              estimand = "ATT",
+              stop.method = "es.mean",
+              verbose = FALSE
+            ),
+            gbm_params
+          )
+        )
+
+        # Predict propensity scores for held-out fold k
+        ps_pred = predict(
+          ps_fit$gbm.obj,
+          newdata = test_data,
+          n.trees = ps_fit$desc$es.mean$n.trees,
+          type = "response"
+        )
+
+        # Compute IPT weights for held-out fold (ATT weights)
+        weights[test_idx] = ifelse(
+          Z[test_idx] == 1,
+          1,
+          ps_pred / (1 - ps_pred)
+        )
+
+        # Fit outcome model on control units from K-1 folds
+        control_train = train_data[train_data[[treatment]] == 0, ]
+        mu0_fit = glm(
+          formula = as.formula(paste(outcome, "~", f.out)),
+          data = control_train,
+          family = "quasibinomial",
+          control = glm.control(maxit = 50)
+        )
+
+        # Predict counterfactual outcomes for held-out fold k
+        mu_hat_0[test_idx] = predict(
+          mu0_fit,
+          newdata = test_data,
+          type = "response"
+        )
+
+        # Compute fold-specific AIPW estimate
+        Y_k = Y[test_idx]
+        Z_k = Z[test_idx]
+        weights_k = weights[test_idx]
+        mu_hat_0_k = mu_hat_0[test_idx]
+        N1_k = sum(Z_k)
+
+        aipw_fold_estimates[fold] = (1 / N1_k) *
+          sum((Z_k - (1 - Z_k) * weights_k) * (Y_k - mu_hat_0_k))
+
+        # Compute fold-specific DRS estimate
+        # Create weighted survey design for fold k
+        test_data_wgt = test_data
+        test_data_wgt$ps_wgt = weights[test_idx]
+
+        weighted_design = svydesign(
+          ids = ~1,
+          weights = ~ps_wgt,
+          data = test_data_wgt
+        )
+
+        # Build outcome model formula
+        if (f.out != "1") {
+          formula_str = paste(outcome, "~", treatment, "+", f.out)
+        } else {
+          formula_str = paste(outcome, "~", treatment)
         }
+
+        # Fit weighted outcome model on fold k
+        fit = svyglm(
+          formula = as.formula(formula_str),
+          family = 'quasibinomial',
+          design = weighted_design
+        )
+
+        # Predict counterfactuals for treated units in fold k
+        treated_k = test_data_wgt[test_data_wgt[[treatment]] == 1, ]
+        counterfactual_k = treated_k
+        counterfactual_k[[treatment]] = 0
+
+        mu0_drs_k = predict(fit, newdata = counterfactual_k, type = "response")
+        mu_hat_0_drs = mean(mu0_drs_k)
+        mu_hat_1_drs = mean(Y_k[Z_k == 1])
+
+        drs_fold_estimates[fold] = mu_hat_1_drs - mu_hat_0_drs
       }
+
+      # Average across folds for final bootstrap estimates
+      aipw_est = mean(aipw_fold_estimates)
+      drs_est = mean(drs_fold_estimates)
+
+      # Compute balance diagnostics using full bootstrap sample
+      avg_asd = NA_real_
+      max_asd = NA_real_
+      ess = NA_real_
+
+      tryCatch(
+        {
+          # Extract all covariates (exclude treatment, outcome)
+          covariate_cols = setdiff(
+            names(boot_data),
+            c(treatment, outcome)
+          )
+
+          if (length(covariate_cols) > 0) {
+            covariates = boot_data[, covariate_cols, drop = FALSE]
+
+            # Ensure treatment is numeric 0/1
+            treat_vec = as.numeric(boot_data[[treatment]])
+
+            # Ensure weights are numeric
+            weights_vec = as.numeric(weights)
+
+            # Check for valid weights
+            if (all(is.finite(weights_vec)) && all(weights_vec > 0)) {
+              # Compute standardized differences
+              std_diffs = unlist(sapply(
+                covariates,
+                std.diff,
+                z = treat_vec,
+                w = weights_vec
+              ))
+              std_diffs = std_diffs[!is.na(std_diffs)]
+
+              if (length(std_diffs) > 0) {
+                avg_asd = mean(std_diffs)
+                max_asd = max(std_diffs)
+              }
+
+              # Compute effective sample size
+              ess = sum(weights_vec)^2 / sum(weights_vec^2)
+            }
+          }
+        },
+        error = function(e) {
+          # If calculation fails, leave as NA
+        }
+      )
+
+      return(c(
+        aipw = aipw_est,
+        drs = drs_est,
+        avg_asd = avg_asd,
+        max_asd = max_asd,
+        ess = ess
+      ))
     },
     error = function(e) {
-      # If calculation fails, leave as NA
+      # Return NAs if anything fails during cross-fitting
+      return(c(
+        aipw = NA_real_,
+        drs = NA_real_,
+        avg_asd = NA_real_,
+        max_asd = NA_real_,
+        ess = NA_real_
+      ))
     }
   )
-
-  return(c(
-    aipw = aipw_est,
-    drs = drs_est,
-    avg_asd = avg_asd,
-    max_asd = max_asd,
-    ess = ess
-  ))
 }
 
 # Main cross-fitted bootstrap DR function
@@ -1838,7 +1854,7 @@ cf_DR_att = function(
   f.ps,
   f.out,
   data,
-  ps_params = list(
+  gbm_params = list(
     n.trees = 10000,
     interaction.depth = 2,
     shrinkage = 0.01,
@@ -1867,7 +1883,7 @@ cf_DR_att = function(
   #' @param f.ps formula - propensity score model formula
   #' @param f.out character - outcome model formula (RHS only)
   #' @param data data.frame - dataset
-  #' @param ps_params list - GBM parameters for ps() function
+  #' @param gbm_params list - GBM parameters for ps() function
   #' @param k integer - number of cross-fitting folds (default: 5)
   #' @param stratified logical - use stratified bootstrap to maintain treatment/control proportions (default TRUE)
   #' @param n_boot integer - number of bootstrap replications
@@ -1933,7 +1949,7 @@ cf_DR_att = function(
     data = full_data_binary,
     k = k,
     stratify = stratified,
-    ps_params = ps_params,
+    gbm_params = gbm_params,
     seed = seed,
     verbose = FALSE
   )
@@ -1947,7 +1963,7 @@ cf_DR_att = function(
     data = full_data_binary,
     k = k,
     stratify = stratified,
-    ps_params = ps_params,
+    gbm_params = gbm_params,
     seed = seed,
     verbose = FALSE
   )
@@ -2012,7 +2028,7 @@ cf_DR_att = function(
       control_level = control_level,
       f.ps = f.ps,
       f.out = f.out,
-      ps_params = ps_params,
+      gbm_params = gbm_params,
       k = k,
       stratify = stratified,
       seed_offset = seed + b

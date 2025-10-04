@@ -16,7 +16,7 @@ params_ps = list(
 # Grid of hyperparameters for GBM
 gbm.grid = list(
   distribution = c("bernoulli"),
-  n.trees = c(1000, 3000, 5000),
+  n.trees = 5000,
   interaction.depth = 1,
   shrinkage = seq(0.01, 0.05, by = 0.005),
   bag.fraction = c(.3, .5, 1, .75),
