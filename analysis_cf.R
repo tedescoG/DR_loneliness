@@ -56,13 +56,6 @@ results_cf = list()
 # Model 1: Cross-fitted Bootstrap
 # =============================================================================
 
-cat("\n\n")
-cat("=======================================================================\n")
-cat("MODEL 1: Cross-Fitted Bootstrap (Intercept-only outcome model)\n")
-cat(
-  "=======================================================================\n\n"
-)
-
 results_cf$model1 = cf_DR_att(
   outcome = "severe_loneliness",
   treatment = "remote_contact",
@@ -74,7 +67,7 @@ results_cf$model1 = cf_DR_att(
   ps_params = gbm_inc_dec,
   k = 2,
   stratified = TRUE,
-  n_boot = 50,
+  n_boot = 500,
   seed = run,
   verbose = TRUE,
   parallel = F,
@@ -85,13 +78,6 @@ results_cf$model1 = cf_DR_att(
 # =============================================================================
 # Model 2: Cross-fitted Bootstrap
 # =============================================================================
-
-cat("\n\n")
-cat("=======================================================================\n")
-cat("MODEL 2: Cross-Fitted Bootstrap (Baseline loneliness)\n")
-cat(
-  "=======================================================================\n\n"
-)
 
 results_cf$model2 = cf_DR_att(
   outcome = "severe_loneliness",
@@ -116,13 +102,6 @@ results_cf$model2 = cf_DR_att(
 # Model 3: Cross-fitted Bootstrap
 # =============================================================================
 
-cat("\n\n")
-cat("=======================================================================\n")
-cat("MODEL 3: Cross-Fitted Bootstrap (Baseline loneliness + depression)\n")
-cat(
-  "=======================================================================\n\n"
-)
-
 results_cf$model3 = cf_DR_att(
   outcome = "severe_loneliness",
   treatment = "remote_contact",
@@ -146,13 +125,6 @@ results_cf$model3 = cf_DR_att(
 # Model 4: Cross-fitted Bootstrap
 # =============================================================================
 
-cat("\n\n")
-cat("=======================================================================\n")
-cat("MODEL 4: Cross-Fitted Bootstrap (Fully saturated)\n")
-cat(
-  "=======================================================================\n\n"
-)
-
 results_cf$model4 = cf_DR_att(
   outcome = "severe_loneliness",
   treatment = "remote_contact",
@@ -175,13 +147,6 @@ results_cf$model4 = cf_DR_att(
 # =============================================================================
 # Diagnostic plots - Cross-fitted estimates across models
 # =============================================================================
-
-cat("\n\n")
-cat("=======================================================================\n")
-cat("CREATING COMPARATIVE DIAGNOSTIC PLOTS\n")
-cat(
-  "=======================================================================\n\n"
-)
 
 # Comparison across models for AIPW
 par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
@@ -341,13 +306,6 @@ legend(
 # Save results
 # =============================================================================
 
-cat("\n\n")
-cat("=======================================================================\n")
-cat("SAVING RESULTS\n")
-cat(
-  "=======================================================================\n\n"
-)
-
 # Create output directory if it doesn't exist
 if (!dir.exists("results/outcome/cross_fitted")) {
   dir.create("results/outcome/cross_fitted", recursive = TRUE)
@@ -475,13 +433,3 @@ write.csv(
 )
 
 cat("\n\nResults saved successfully!\n")
-cat("Output directory: results/outcome/cross_fitted/\n")
-cat("  - Individual model results: model1_cf.rds - model4_cf.rds\n")
-cat("  - Combined results: all_results_cf.rds\n")
-cat("  - Summary table: bootstrap_CF_summary.csv\n\n")
-
-cat("=======================================================================\n")
-cat("ANALYSIS COMPLETE\n")
-cat(
-  "=======================================================================\n\n"
-)

@@ -509,42 +509,6 @@ aipw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   ))
 }
 
-# Cross-fitting Helper ----------------------------------------------------------------####
-create_kfolds = function(data, k = 5, stratify_var = NULL, seed = 123) {
-  #' Create K folds for cross-fitting
-  #'
-  #' @param data data.frame - input data
-  #' @param k integer - number of folds
-  #' @param stratify_var character - variable name for stratification (NULL for unstratified)
-  #' @param seed integer - random seed
-  #'
-  #' @return list of k vectors containing row indices for each fold
-
-  set.seed(seed)
-  n = nrow(data)
-
-  if (is.null(stratify_var)) {
-    # Unstratified: random assignment
-    fold_ids = sample(rep(1:k, length.out = n))
-  } else {
-    # Stratified: maintain proportions within each stratum
-    strata = data[[stratify_var]]
-    unique_strata = unique(strata)
-    fold_ids = numeric(n)
-
-    for (stratum in unique_strata) {
-      stratum_idx = which(strata == stratum)
-      n_stratum = length(stratum_idx)
-      stratum_folds = sample(rep(1:k, length.out = n_stratum))
-      fold_ids[stratum_idx] = stratum_folds
-    }
-  }
-
-  # Create list of indices for each fold
-  fold_indices = lapply(1:k, function(i) which(fold_ids == i))
-  return(fold_indices)
-}
-
 # Cross-fitted AIPW -------------------------------------------------------------------####
 cf_aipw_att = function(
   outcome,
@@ -554,7 +518,7 @@ cf_aipw_att = function(
   data,
   k = 5,
   stratify = TRUE,
-  ps_params = list(
+  gbm_params = list(
     n.trees = 10000,
     interaction.depth = 2,
     shrinkage = 0.01,
@@ -587,7 +551,8 @@ cf_aipw_att = function(
 
   # Create folds
   stratify_var = if (stratify) treatment else NULL
-  folds = create_kfolds(data, k = k, stratify_var = stratify_var, seed = seed)
+  set.seed(seed)
+  folds = vfold_cv(data, v = k, strata = stratify_var)
 
   if (verbose) {
     cat(sprintf("Cross-fitted AIPW with %d folds\n", k))
@@ -606,7 +571,7 @@ cf_aipw_att = function(
     }
 
     # Split data: predict on fold k, train on all other folds
-    test_idx = folds[[fold]]
+    test_idx = folds$splits[[fold]]$in_id
     train_idx = setdiff(1:n, test_idx)
 
     train_data = data[train_idx, ]
@@ -624,7 +589,7 @@ cf_aipw_att = function(
           stop.method = "es.mean",
           verbose = FALSE
         ),
-        ps_params
+        gbm_params
       )
     )
 
@@ -666,7 +631,8 @@ cf_aipw_att = function(
     mu_hat_0_k = mu_hat_0[test_idx]
     N1_k = sum(Z_k)
 
-    att_estimates[fold] = (1 / N1_k) * sum((Z_k - (1 - Z_k) * weights_k) * (Y_k - mu_hat_0_k))
+    att_estimates[fold] = (1 / N1_k) *
+      sum((Z_k - (1 - Z_k) * weights_k) * (Y_k - mu_hat_0_k))
   }
 
   # Average fold-specific ATT estimates for final cross-fitted estimate
@@ -675,14 +641,14 @@ cf_aipw_att = function(
   # Output
   if (verbose) {
     cat(sprintf("\nCross-fitted AIPW ATT: %.4f\n", att_est))
-    cat(sprintf("Mean Y(0) [counterfactual]: %.4f\n", mean(mu_hat_0[Z == 1])))
+    cat(sprintf("Mean Y(0) [counterfactual]: %.4f\n", mean(mu_hat_0[Z == 0])))
     cat(sprintf("Mean Y(1) [observed]: %.4f\n", mean(Y[Z == 1])))
   }
 
   # Return results (same structure as aipw_att for compatibility)
   return(list(
     att = att_est,
-    mu_hat_0 = mu_hat_0,
+    mu_hat_0 = mean(mu_hat_0[Z == 0]),
     mu_hat_1 = mean(Y[Z == 1])
   ))
 }
@@ -712,7 +678,7 @@ drs_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   )
 
   # Build formula: outcome ~ treatment + covariates
-  if (nzchar(f.out)) {
+  if (f.out != "1") {
     formula_str = paste(outcome, "~", treatment, "+", f.out)
   } else {
     formula_str = paste(outcome, "~", treatment)
@@ -811,7 +777,8 @@ cf_drs_att = function(
 
   # Create K folds
   stratify_var = if (stratify) treatment else NULL
-  folds = create_kfolds(data, k = k, stratify_var = stratify_var, seed = seed)
+  set.seed(seed)
+  folds = vfold_cv(data, v = k, strata = stratify_var, see)
 
   # Initialize storage
   weights = numeric(n)
@@ -828,7 +795,7 @@ cf_drs_att = function(
     }
 
     # Split data
-    test_idx = folds[[fold]]
+    test_idx = folds$splits[[fold]]$in_id
     train_idx = setdiff(1:n, test_idx)
 
     train_data = data[train_idx, ]
@@ -876,7 +843,7 @@ cf_drs_att = function(
     )
 
     # Build outcome model formula
-    if (nzchar(f.out)) {
+    if (f.out != "1") {
       formula_str = paste(outcome, "~", treatment, "+", f.out)
     } else {
       formula_str = paste(outcome, "~", treatment)
@@ -915,17 +882,11 @@ cf_drs_att = function(
 
   if (verbose) {
     cat(sprintf("\nCross-fitted DRS ATT: %.4f\n", att_est))
-    cat(sprintf("Fold SD: %.4f\n", sd(drs_fold_estimates)))
-    cat(sprintf("Fold range: [%.4f, %.4f]\n",
-                min(drs_fold_estimates),
-                max(drs_fold_estimates)))
   }
 
   # Return results (compatible with drs_att structure)
   return(list(
-    att = att_est,
-    fold_estimates = drs_fold_estimates,
-    fold_sd = sd(drs_fold_estimates)
+    att = att_est
   ))
 }
 
@@ -1645,12 +1606,6 @@ DR_att = function(
   ))
 }
 
-# diagnostics for ps
-# ps_inc_dec$desc$es.mean.ATT$ess.ctrl
-# ps_inc_dec$desc$es.mean.ATT$mean.es
-# hist(ps_inc_dec$ps$es.mean.ATT)
-# hist(ps_inc_dec$w$es.mean.ATT)
-
 # CROSS-FITTED BOOTSTRAP DR ESTIMATORS ---------------------------------------------####
 
 # Helper function for single bootstrap iteration with cross-fitting
@@ -1701,12 +1656,8 @@ boot_iter_crossfit = function(
 
   # Create K folds with stratification
   stratify_var = if (stratify) treatment else NULL
-  folds = create_kfolds(
-    boot_data,
-    k = k,
-    stratify_var = stratify_var,
-    seed = seed_offset
-  )
+  set.seed(seed_offset)
+  folds = vfold_cv(boot_data, v = k, strata = stratify_var)
 
   # Initialize storage for fold-specific estimates
   mu_hat_0 = numeric(n)
@@ -1717,7 +1668,7 @@ boot_iter_crossfit = function(
   # Cross-fitting loop
   for (fold in 1:k) {
     # Split data: predict on fold k, train on K-1 folds
-    test_idx = folds[[fold]]
+    test_idx = folds$splits[[fold]]$in_id
     train_idx = setdiff(1:n, test_idx)
 
     train_data = boot_data[train_idx, ]
@@ -1792,7 +1743,7 @@ boot_iter_crossfit = function(
     )
 
     # Build outcome model formula
-    if (nzchar(f.out)) {
+    if (f.out != "1") {
       formula_str = paste(outcome, "~", treatment, "+", f.out)
     } else {
       formula_str = paste(outcome, "~", treatment)
