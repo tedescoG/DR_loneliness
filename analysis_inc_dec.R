@@ -8,7 +8,7 @@ run = 123
 source("utils.R")
 
 # Load data
-d = readRDS("data/data_ipwt2.rds")
+d = readRDS("data/data_iptw2.rds")
 
 # Define propensity score formula
 ps_formula = as.formula(
