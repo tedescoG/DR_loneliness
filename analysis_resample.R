@@ -1,5 +1,5 @@
 # Bootstrap Doubly Robust ATT Estimation Analysis - Resample Method
-# Comparison: Increase vs Decrease
+# All comparisons
 # This script runs DR_att() with 4 different outcome models using "resample" bootstrap method
 
 # Setup
@@ -53,7 +53,7 @@ gbm_inc_dec = readRDS("results/weighting/inc_dec_params.rds")
 results = list()
 
 # =============================================================================
-# Model 1: Resample Method
+# Model 1: Increase vs Decrease
 # =============================================================================
 
 results$model1_resample = DR_att(
@@ -75,7 +75,29 @@ results$model1_resample = DR_att(
 )
 
 # =============================================================================
-# Model 2: Resample Method
+# Model 1: Increase vs Mix
+# =============================================================================
+
+results$model1_resample = DR_att(
+  outcome = "severe_loneliness",
+  treatment = "remote_contact",
+  treated_level = "increase",
+  control_level = "mix",
+  f.ps = ps_formula,
+  f.out = outcome_formula_1,
+  data = d,
+  ps_params = gbm_inc_mix,
+  n_boot = 500,
+  seed = run,
+  verbose = TRUE,
+  parallel = TRUE,
+  n_cores = NULL,
+  plot_diagnostics = TRUE,
+  bootstrap_method = "resample"
+)
+
+# =============================================================================
+# Model 2: Increase vs Decrease
 # =============================================================================
 
 results$model2_resample = DR_att(
@@ -97,7 +119,29 @@ results$model2_resample = DR_att(
 )
 
 # =============================================================================
-# Model 3: Resample Method
+# Model 2: Increase vs Mix
+# =============================================================================
+
+results$model2_resample = DR_att(
+  outcome = "severe_loneliness",
+  treatment = "remote_contact",
+  treated_level = "increase",
+  control_level = "mix",
+  f.ps = ps_formula,
+  f.out = outcome_formula_2,
+  data = d,
+  ps_params = gbm_inc_mix,
+  n_boot = 500,
+  seed = run,
+  verbose = TRUE,
+  parallel = TRUE,
+  n_cores = NULL,
+  plot_diagnostics = TRUE,
+  bootstrap_method = "resample"
+)
+
+# =============================================================================
+# Model 3: Increase vs Decrease
 # =============================================================================
 
 results$model3_resample = DR_att(
@@ -119,7 +163,29 @@ results$model3_resample = DR_att(
 )
 
 # =============================================================================
-# Model 4: Resample Method
+# Model 3: Increase vs Mix
+# =============================================================================
+
+results$model3_resample = DR_att(
+  outcome = "severe_loneliness",
+  treatment = "remote_contact",
+  treated_level = "increase",
+  control_level = "mix",
+  f.ps = ps_formula,
+  f.out = outcome_formula_3,
+  data = d,
+  ps_params = gbm_inc_mix,
+  n_boot = 500,
+  seed = run,
+  verbose = TRUE,
+  parallel = TRUE,
+  n_cores = NULL,
+  plot_diagnostics = TRUE,
+  bootstrap_method = "resample"
+)
+
+# =============================================================================
+# Model 4: Increase vs Decrease
 # =============================================================================
 
 results$model4_resample = DR_att(
@@ -132,6 +198,29 @@ results$model4_resample = DR_att(
   data = d,
   gbm_params = gbm_inc_dec,
   n_boot = 1000,
+  seed = run,
+  verbose = TRUE,
+  parallel = TRUE,
+  n_cores = NULL,
+  plot_diagnostics = TRUE,
+  bootstrap_method = "resample"
+)
+
+
+# =============================================================================
+# Model 4: Increase vs Mix
+# =============================================================================
+
+results$model4_resample = DR_att(
+  outcome = "severe_loneliness",
+  treatment = "remote_contact",
+  treated_level = "increase",
+  control_level = "mix",
+  f.ps = ps_formula,
+  f.out = outcome_formula_4,
+  data = d,
+  ps_params = gbm_inc_mix,
+  n_boot = 500,
   seed = run,
   verbose = TRUE,
   parallel = TRUE,
