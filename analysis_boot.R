@@ -61,15 +61,16 @@ results_boot$model1_ord = DR_att_boot(
   f.out = outcome_formula_1,
   data = d,
   gbm_params = gbm_inc_dec,
-  n_boot = 1000,
+  n_boot = 10,
   seed = run,
   verbose = TRUE,
   parallel = TRUE,
   n_cores = NULL,
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
-  ci_type = "perc",
-  sim = "ordinary"
+  ci_type = "all",
+  sim = "ordinary",
+  save_to = "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/outcome/boot/figures"
 )
 
 # =============================================================================
@@ -93,7 +94,8 @@ results_boot$model1_bal = DR_att_boot(
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
   ci_type = "perc",
-  sim = "balanced"
+  sim = "balanced",
+  save_to = "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/outcome/boot/figures"
 )
 
 # =============================================================================
@@ -117,7 +119,8 @@ results_boot$model2_ord = DR_att_boot(
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
   ci_type = "perc",
-  sim = "ordinary"
+  sim = "ordinary",
+  save_to = "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/outcome/boot/figures"
 )
 
 # =============================================================================
@@ -141,7 +144,8 @@ results_boot$model2_bal = DR_att_boot(
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
   ci_type = "perc",
-  sim = "balanced"
+  sim = "balanced",
+  save_to = "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/outcome/boot/figures"
 )
 
 # =============================================================================
@@ -165,7 +169,8 @@ results_boot$model3_ord = DR_att_boot(
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
   ci_type = "perc",
-  sim = "ordinary"
+  sim = "ordinary",
+  save_to = "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/outcome/boot/figures"
 )
 
 # =============================================================================
@@ -189,7 +194,8 @@ results_boot$model3_bal = DR_att_boot(
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
   ci_type = "perc",
-  sim = "balanced"
+  sim = "balanced",
+  save_to = "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/outcome/boot/figures"
 )
 
 # =============================================================================
@@ -213,7 +219,8 @@ results_boot$model4_ord = DR_att_boot(
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
   ci_type = "perc",
-  sim = "ordinary"
+  sim = "ordinary",
+  save_to = "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/outcome/boot/figures"
 )
 
 # =============================================================================
@@ -237,14 +244,21 @@ results_boot$model4_bal = DR_att_boot(
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
   ci_type = "perc",
-  sim = "balanced"
+  sim = "balanced",
+  save_to = "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/outcome/boot/figures"
 )
 
 # =============================================================================
 # Diagnostic plots - Bootstrap estimates across models and schemes
 # =============================================================================
 
+# Create directory for final diagnostic plots if it doesn't exist
+if (!dir.exists("results/outcome/boot/figures")) {
+  dir.create("results/outcome/boot/figures", recursive = TRUE)
+}
+
 # Comparison across models for AIPW - Ordinary vs Balanced
+# Display plot
 par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
 
 hist(
@@ -285,6 +299,54 @@ abline(v = results_boot$model2_bal$aipw$att, col = "red", lwd = 2, lty = 2)
 
 par(mfrow = c(1, 1))
 
+# Save to file
+png(
+  "results/outcome/boot/figures/aipw_models_1_2_comparison.png",
+  width = 800,
+  height = 800
+)
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+
+hist(
+  results_boot$model1_ord$aipw$bootstrap_samples,
+  main = "AIPW Model 1 - Ordinary",
+  xlab = "ATT",
+  col = "lightblue",
+  breaks = 30
+)
+abline(v = results_boot$model1_ord$aipw$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model1_bal$aipw$bootstrap_samples,
+  main = "AIPW Model 1 - Balanced",
+  xlab = "ATT",
+  col = "lightcoral",
+  breaks = 30
+)
+abline(v = results_boot$model1_bal$aipw$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model2_ord$aipw$bootstrap_samples,
+  main = "AIPW Model 2 - Ordinary",
+  xlab = "ATT",
+  col = "lightblue",
+  breaks = 30
+)
+abline(v = results_boot$model2_ord$aipw$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model2_bal$aipw$bootstrap_samples,
+  main = "AIPW Model 2 - Balanced",
+  xlab = "ATT",
+  col = "lightcoral",
+  breaks = 30
+)
+abline(v = results_boot$model2_bal$aipw$att, col = "red", lwd = 2, lty = 2)
+
+par(mfrow = c(1, 1))
+dev.off()
+
+# Display plot
 par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
 
 hist(
@@ -325,7 +387,55 @@ abline(v = results_boot$model4_bal$aipw$att, col = "red", lwd = 2, lty = 2)
 
 par(mfrow = c(1, 1))
 
+# Save to file
+png(
+  "results/outcome/boot/figures/aipw_models_3_4_comparison.png",
+  width = 800,
+  height = 800
+)
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+
+hist(
+  results_boot$model3_ord$aipw$bootstrap_samples,
+  main = "AIPW Model 3 - Ordinary",
+  xlab = "ATT",
+  col = "lightblue",
+  breaks = 30
+)
+abline(v = results_boot$model3_ord$aipw$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model3_bal$aipw$bootstrap_samples,
+  main = "AIPW Model 3 - Balanced",
+  xlab = "ATT",
+  col = "lightcoral",
+  breaks = 30
+)
+abline(v = results_boot$model3_bal$aipw$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model4_ord$aipw$bootstrap_samples,
+  main = "AIPW Model 4 - Ordinary",
+  xlab = "ATT",
+  col = "lightblue",
+  breaks = 30
+)
+abline(v = results_boot$model4_ord$aipw$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model4_bal$aipw$bootstrap_samples,
+  main = "AIPW Model 4 - Balanced",
+  xlab = "ATT",
+  col = "lightcoral",
+  breaks = 30
+)
+abline(v = results_boot$model4_bal$aipw$att, col = "red", lwd = 2, lty = 2)
+
+par(mfrow = c(1, 1))
+dev.off()
+
 # Comparison across models for DRS - Ordinary vs Balanced
+# Display plot
 par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
 
 hist(
@@ -366,6 +476,54 @@ abline(v = results_boot$model2_bal$drs$att, col = "red", lwd = 2, lty = 2)
 
 par(mfrow = c(1, 1))
 
+# Save to file
+png(
+  "results/outcome/boot/figures/drs_models_1_2_comparison.png",
+  width = 800,
+  height = 800
+)
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+
+hist(
+  results_boot$model1_ord$drs$bootstrap_samples,
+  main = "DRS Model 1 - Ordinary",
+  xlab = "ATT",
+  col = "lightgreen",
+  breaks = 30
+)
+abline(v = results_boot$model1_ord$drs$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model1_bal$drs$bootstrap_samples,
+  main = "DRS Model 1 - Balanced",
+  xlab = "ATT",
+  col = "lightyellow",
+  breaks = 30
+)
+abline(v = results_boot$model1_bal$drs$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model2_ord$drs$bootstrap_samples,
+  main = "DRS Model 2 - Ordinary",
+  xlab = "ATT",
+  col = "lightgreen",
+  breaks = 30
+)
+abline(v = results_boot$model2_ord$drs$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model2_bal$drs$bootstrap_samples,
+  main = "DRS Model 2 - Balanced",
+  xlab = "ATT",
+  col = "lightyellow",
+  breaks = 30
+)
+abline(v = results_boot$model2_bal$drs$att, col = "red", lwd = 2, lty = 2)
+
+par(mfrow = c(1, 1))
+dev.off()
+
+# Display plot
 par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
 
 hist(
@@ -406,7 +564,55 @@ abline(v = results_boot$model4_bal$drs$att, col = "red", lwd = 2, lty = 2)
 
 par(mfrow = c(1, 1))
 
+# Save to file
+png(
+  "results/outcome/boot/figures/drs_models_3_4_comparison.png",
+  width = 800,
+  height = 800
+)
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+
+hist(
+  results_boot$model3_ord$drs$bootstrap_samples,
+  main = "DRS Model 3 - Ordinary",
+  xlab = "ATT",
+  col = "lightgreen",
+  breaks = 30
+)
+abline(v = results_boot$model3_ord$drs$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model3_bal$drs$bootstrap_samples,
+  main = "DRS Model 3 - Balanced",
+  xlab = "ATT",
+  col = "lightyellow",
+  breaks = 30
+)
+abline(v = results_boot$model3_bal$drs$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model4_ord$drs$bootstrap_samples,
+  main = "DRS Model 4 - Ordinary",
+  xlab = "ATT",
+  col = "lightgreen",
+  breaks = 30
+)
+abline(v = results_boot$model4_ord$drs$att, col = "red", lwd = 2, lty = 2)
+
+hist(
+  results_boot$model4_bal$drs$bootstrap_samples,
+  main = "DRS Model 4 - Balanced",
+  xlab = "ATT",
+  col = "lightyellow",
+  breaks = 30
+)
+abline(v = results_boot$model4_bal$drs$att, col = "red", lwd = 2, lty = 2)
+
+par(mfrow = c(1, 1))
+dev.off()
+
 # Overlay densities for AIPW across models - Ordinary Bootstrap
+# Display plot
 plot(
   density(results_boot$model1_ord$aipw$bootstrap_samples),
   main = "AIPW Estimates Across Models - Ordinary Bootstrap",
@@ -442,7 +648,50 @@ legend(
   lwd = 2
 )
 
+# Save to file
+png(
+  "results/outcome/boot/figures/aipw_density_ordinary.png",
+  width = 800,
+  height = 600
+)
+plot(
+  density(results_boot$model1_ord$aipw$bootstrap_samples),
+  main = "AIPW Estimates Across Models - Ordinary Bootstrap",
+  xlab = "ATT",
+  col = "blue",
+  lwd = 2,
+  xlim = range(c(
+    results_boot$model1_ord$aipw$bootstrap_samples,
+    results_boot$model2_ord$aipw$bootstrap_samples,
+    results_boot$model3_ord$aipw$bootstrap_samples,
+    results_boot$model4_ord$aipw$bootstrap_samples
+  ))
+)
+lines(
+  density(results_boot$model2_ord$aipw$bootstrap_samples),
+  col = "red",
+  lwd = 2
+)
+lines(
+  density(results_boot$model3_ord$aipw$bootstrap_samples),
+  col = "green",
+  lwd = 2
+)
+lines(
+  density(results_boot$model4_ord$aipw$bootstrap_samples),
+  col = "purple",
+  lwd = 2
+)
+legend(
+  "topleft",
+  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
+  col = c("blue", "red", "green", "purple"),
+  lwd = 2
+)
+dev.off()
+
 # Overlay densities for AIPW across models - Balanced Bootstrap
+# Display plot
 plot(
   density(results_boot$model1_bal$aipw$bootstrap_samples),
   main = "AIPW Estimates Across Models - Balanced Bootstrap",
@@ -478,7 +727,50 @@ legend(
   lwd = 2
 )
 
+# Save to file
+png(
+  "results/outcome/boot/figures/aipw_density_balanced.png",
+  width = 800,
+  height = 600
+)
+plot(
+  density(results_boot$model1_bal$aipw$bootstrap_samples),
+  main = "AIPW Estimates Across Models - Balanced Bootstrap",
+  xlab = "ATT",
+  col = "blue",
+  lwd = 2,
+  xlim = range(c(
+    results_boot$model1_bal$aipw$bootstrap_samples,
+    results_boot$model2_bal$aipw$bootstrap_samples,
+    results_boot$model3_bal$aipw$bootstrap_samples,
+    results_boot$model4_bal$aipw$bootstrap_samples
+  ))
+)
+lines(
+  density(results_boot$model2_bal$aipw$bootstrap_samples),
+  col = "red",
+  lwd = 2
+)
+lines(
+  density(results_boot$model3_bal$aipw$bootstrap_samples),
+  col = "green",
+  lwd = 2
+)
+lines(
+  density(results_boot$model4_bal$aipw$bootstrap_samples),
+  col = "purple",
+  lwd = 2
+)
+legend(
+  "topleft",
+  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
+  col = c("blue", "red", "green", "purple"),
+  lwd = 2
+)
+dev.off()
+
 # Overlay densities for DRS across models - Ordinary Bootstrap
+# Display plot
 plot(
   density(results_boot$model1_ord$drs$bootstrap_samples),
   main = "DRS Estimates Across Models - Ordinary Bootstrap",
@@ -514,7 +806,50 @@ legend(
   lwd = 2
 )
 
+# Save to file
+png(
+  "results/outcome/boot/figures/drs_density_ordinary.png",
+  width = 800,
+  height = 600
+)
+plot(
+  density(results_boot$model1_ord$drs$bootstrap_samples),
+  main = "DRS Estimates Across Models - Ordinary Bootstrap",
+  xlab = "ATT",
+  col = "blue",
+  lwd = 2,
+  xlim = range(c(
+    results_boot$model1_ord$drs$bootstrap_samples,
+    results_boot$model2_ord$drs$bootstrap_samples,
+    results_boot$model3_ord$drs$bootstrap_samples,
+    results_boot$model4_ord$drs$bootstrap_samples
+  ))
+)
+lines(
+  density(results_boot$model2_ord$drs$bootstrap_samples),
+  col = "red",
+  lwd = 2
+)
+lines(
+  density(results_boot$model3_ord$drs$bootstrap_samples),
+  col = "green",
+  lwd = 2
+)
+lines(
+  density(results_boot$model4_ord$drs$bootstrap_samples),
+  col = "purple",
+  lwd = 2
+)
+legend(
+  "topleft",
+  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
+  col = c("blue", "red", "green", "purple"),
+  lwd = 2
+)
+dev.off()
+
 # Overlay densities for DRS across models - Balanced Bootstrap
+# Display plot
 plot(
   density(results_boot$model1_bal$drs$bootstrap_samples),
   main = "DRS Estimates Across Models - Balanced Bootstrap",
@@ -549,6 +884,48 @@ legend(
   col = c("blue", "red", "green", "purple"),
   lwd = 2
 )
+
+# Save to file
+png(
+  "results/outcome/boot/figures/drs_density_balanced.png",
+  width = 800,
+  height = 600
+)
+plot(
+  density(results_boot$model1_bal$drs$bootstrap_samples),
+  main = "DRS Estimates Across Models - Balanced Bootstrap",
+  xlab = "ATT",
+  col = "blue",
+  lwd = 2,
+  xlim = range(c(
+    results_boot$model1_bal$drs$bootstrap_samples,
+    results_boot$model2_bal$drs$bootstrap_samples,
+    results_boot$model3_bal$drs$bootstrap_samples,
+    results_boot$model4_bal$drs$bootstrap_samples
+  ))
+)
+lines(
+  density(results_boot$model2_bal$drs$bootstrap_samples),
+  col = "red",
+  lwd = 2
+)
+lines(
+  density(results_boot$model3_bal$drs$bootstrap_samples),
+  col = "green",
+  lwd = 2
+)
+lines(
+  density(results_boot$model4_bal$drs$bootstrap_samples),
+  col = "purple",
+  lwd = 2
+)
+legend(
+  "topleft",
+  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
+  col = c("blue", "red", "green", "purple"),
+  lwd = 2
+)
+dev.off()
 
 # =============================================================================
 # Save results

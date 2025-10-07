@@ -1829,7 +1829,8 @@ DR_att_boot = function(
   n_cores = NULL,
   plot_diagnostics = TRUE,
   ci_type = c("all", "norm", "basic", "perc", "bca"),
-  sim = c("ordinary", "parametric", "balanced", "permutation", "antithetic")
+  sim = c("ordinary", "parametric", "balanced", "permutation", "antithetic"),
+  save_to = NULL
 ) {
   #' Bootstrap Doubly Robust ATT Estimation using boot package
   #'
@@ -1854,6 +1855,7 @@ DR_att_boot = function(
   #'                            "basic" (basic bootstrap), "perc" (percentile), "bca" (BCa)
   #' @param sim character - type of bootstrap simulation: "ordinary" (default), "parametric",
   #'                        "balanced", "permutation", "antithetic"
+  #' @param save_to character - path to save diagnostic plot (NULL = don't save, default)
   #'
   #' @return list with estimates, SEs, CIs, p-values, and bootstrap samples
 
@@ -2171,6 +2173,7 @@ DR_att_boot = function(
 
   # Generate diagnostic plots
   if (plot_diagnostics) {
+    # Display plots first
     par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
 
     # AIPW histogram
@@ -2204,6 +2207,66 @@ DR_att_boot = function(
     qqline(drs_boots, col = "red", lwd = 2)
 
     par(mfrow = c(1, 1))
+
+    # Save to file if save_to is specified
+    if (!is.null(save_to)) {
+      # Create directory if it doesn't exist
+      if (!dir.exists(save_to)) {
+        dir.create(save_to, recursive = TRUE)
+      }
+
+      # Construct filename
+      filename = sprintf(
+        "%s_%d_%s_%s.png",
+        control_level,
+        n_boot,
+        bootstrap_method,
+        sim
+      )
+      filepath = file.path(save_to, filename)
+
+      # Open high-resolution PNG device for academic paper quality
+      png(filepath, width = 3000, height = 3000, res = 300)
+
+      par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+      # AIPW histogram
+      hist(
+        aipw_boots,
+        main = sprintf("AIPW Bootstrap Distribution (%s)", bootstrap_method),
+        xlab = "ATT Estimate",
+        col = "lightblue",
+        border = "white",
+        breaks = 30
+      )
+      abline(v = aipw_point_att, col = "red", lwd = 2, lty = 2)
+
+      # AIPW QQ-plot
+      qqnorm(aipw_boots, main = "AIPW Q-Q Plot")
+      qqline(aipw_boots, col = "red", lwd = 2)
+
+      # DRS histogram
+      hist(
+        drs_boots,
+        main = sprintf("DRS Bootstrap Distribution (%s)", bootstrap_method),
+        xlab = "ATT Estimate",
+        col = "lightgreen",
+        border = "white",
+        breaks = 30
+      )
+      abline(v = drs_point_att, col = "red", lwd = 2, lty = 2)
+
+      # DRS QQ-plot
+      qqnorm(drs_boots, main = "DRS Q-Q Plot")
+      qqline(drs_boots, col = "red", lwd = 2)
+
+      par(mfrow = c(1, 1))
+
+      dev.off()
+      if (verbose) {
+        cat(sprintf("\nDiagnostic plot saved to: %s\n", filepath))
+      }
+    }
   }
 
   # Return results (compatible with original DR_att format, with additional CI types)
