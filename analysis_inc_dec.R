@@ -131,7 +131,7 @@ results$model4_reweight = DR_att(
   f.out = outcome_formula_4,
   data = d,
   gbm_params = gbm_inc_dec,
-  n_boot = 2000,
+  n_boot = 2\000,
   seed = run,
   verbose = TRUE,
   parallel = TRUE,
@@ -242,7 +242,7 @@ saveRDS(
 )
 
 # Save entire results list
-saveRDS(results, "results/outcome/reweight/test/reweight_results.rds")
+saveRDS(results, "results/outcome/reweight/test_inc_dec/reweight_results.rds")
 
 # Create comprehensive summary table with balance diagnostics
 summary_table = data.frame(
@@ -382,7 +382,7 @@ print(summary_table)
 # Save as CSV
 write.csv(
   summary_table,
-  "results/outcome/reweight/test/reweight_summary.csv",
+  "results/outcome/reweight/test_inc_dec/reweight_summary.csv",
   row.names = FALSE
 )
 

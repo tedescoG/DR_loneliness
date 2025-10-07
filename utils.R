@@ -932,87 +932,103 @@ boot_iter_resample = function(
   #' @param wgt character - name of weight variable
   #'
   #' @return numeric vector with AIPW, DRS estimates and balance metrics
-  # Resample data
-  boot_data = data[indices, ]
 
-  # Create binary treatment indicator
-  boot_data[[treatment]] = as.numeric(
-    boot_data[[treatment]] == treated_level
-  )
-
-  # Compute AIPW estimate with resampled weights
-  aipw_result = aipw_att(
-    outcome = outcome,
-    treatment = treatment,
-    f.out = f.out,
-    wgt = wgt,
-    data = boot_data,
-    verbose = FALSE
-  )
-
-  # Compute DRS estimate with resampled weights
-  drs_result = drs_att(
-    outcome = outcome,
-    treatment = treatment,
-    f.out = f.out,
-    wgt = wgt,
-    data = boot_data,
-    verbose = FALSE
-  )
-
-  # Compute balance diagnostics using our std.diff function
-  avg_asd = NA_real_
-  max_asd = NA_real_
-  ess = NA_real_
-
+  # Wrap entire function in tryCatch to handle failures gracefully
   tryCatch(
     {
-      # Extract all covariates (exclude treatment, outcome, and weight)
-      covariate_cols = setdiff(names(boot_data), c(treatment, outcome, wgt))
+      # Resample data
+      boot_data = data[indices, ]
 
-      if (length(covariate_cols) > 0) {
-        covariates = boot_data[, covariate_cols, drop = FALSE]
+      # Create binary treatment indicator
+      boot_data[[treatment]] = as.numeric(
+        boot_data[[treatment]] == treated_level
+      )
 
-        # Ensure treatment is numeric 0/1
-        treat_vec = as.numeric(boot_data[[treatment]])
+      # Compute AIPW estimate with resampled weights
+      aipw_result = aipw_att(
+        outcome = outcome,
+        treatment = treatment,
+        f.out = f.out,
+        wgt = wgt,
+        data = boot_data,
+        verbose = FALSE
+      )
 
-        # Ensure weights are numeric
-        weights_vec = as.numeric(boot_data[[wgt]])
+      # Compute DRS estimate with resampled weights
+      drs_result = drs_att(
+        outcome = outcome,
+        treatment = treatment,
+        f.out = f.out,
+        wgt = wgt,
+        data = boot_data,
+        verbose = FALSE
+      )
 
-        # Check for valid weights
-        if (all(is.finite(weights_vec)) && all(weights_vec > 0)) {
-          # Compute standardized differences using our function
-          std_diffs = unlist(sapply(
-            covariates,
-            std.diff,
-            z = treat_vec,
-            w = weights_vec
-          ))
-          std_diffs = std_diffs[!is.na(std_diffs)]
+      # Compute balance diagnostics using our std.diff function
+      avg_asd = NA_real_
+      max_asd = NA_real_
+      ess = NA_real_
 
-          if (length(std_diffs) > 0) {
-            avg_asd = mean(std_diffs)
-            max_asd = max(std_diffs)
+      tryCatch(
+        {
+          # Extract all covariates (exclude treatment, outcome, and weight)
+          covariate_cols = setdiff(names(boot_data), c(treatment, outcome, wgt))
+
+          if (length(covariate_cols) > 0) {
+            covariates = boot_data[, covariate_cols, drop = FALSE]
+
+            # Ensure treatment is numeric 0/1
+            treat_vec = as.numeric(boot_data[[treatment]])
+
+            # Ensure weights are numeric
+            weights_vec = as.numeric(boot_data[[wgt]])
+
+            # Check for valid weights
+            if (all(is.finite(weights_vec)) && all(weights_vec > 0)) {
+              # Compute standardized differences using our function
+              std_diffs = unlist(sapply(
+                covariates,
+                std.diff,
+                z = treat_vec,
+                w = weights_vec
+              ))
+              std_diffs = std_diffs[!is.na(std_diffs)]
+
+              if (length(std_diffs) > 0) {
+                avg_asd = mean(std_diffs)
+                max_asd = max(std_diffs)
+              }
+
+              # Compute effective sample size
+              # ESS = (sum of weights)^2 / sum of weights^2
+              ess = sum(weights_vec)^2 / sum(weights_vec^2)
+            }
           }
-
-          # Compute effective sample size
-          # ESS = (sum of weights)^2 / sum of weights^2
-          ess = sum(weights_vec)^2 / sum(weights_vec^2)
+        },
+        error = function(e) {
+          # If calculation fails, leave as NA
         }
-      }
+      )
+
+      return(c(
+        aipw = aipw_result$att,
+        drs = drs_result$att,
+        avg_asd = avg_asd,
+        max_asd = max_asd,
+        ess = ess
+      ))
     },
     error = function(e) {
-      # If calculation fails, leave as NA
+      # Return NAs if anything fails during bootstrap iteration
+      return(c(
+        aipw = NA_real_,
+        drs = NA_real_,
+        avg_asd = NA_real_,
+        max_asd = NA_real_,
+        ess = NA_real_
+      ))
     }
   )
-
-  return(c(
-    aipw = aipw_result$att,
-    drs = drs_result$att,
-    avg_asd = avg_asd,
-    max_asd = max_asd,
-    ess = ess
-  ))
 }
 
 # Helper function for single bootstrap iteration with PS re-estimation
@@ -1042,109 +1058,125 @@ boot_iter_reweight = function(
   #' @param seed_offset integer - offset for random seed
   #'
   #' @return numeric vector with AIPW, DRS estimates and balance metrics
-  # Resample data
-  boot_data = data[indices, ]
 
-  # Create binary treatment indicator
-  boot_data[[treatment]] = as.numeric(
-    boot_data[[treatment]] == treated_level
-  )
-
-  # Fit propensity score model
-  set.seed(seed_offset)
-  ps_fit = do.call(
-    "ps",
-    c(
-      list(
-        formula = f.ps,
-        data = boot_data,
-        estimand = "ATT",
-        stop.method = "es.mean",
-        verbose = FALSE
-      ),
-      gbm_params
-    )
-  )
-
-  # Extract weights
-  boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
-
-  # Compute AIPW estimate
-  aipw_result = aipw_att(
-    outcome = outcome,
-    treatment = treatment,
-    f.out = f.out,
-    wgt = "ps_wgt",
-    data = boot_data,
-    verbose = FALSE
-  )
-
-  # Compute DRS estimate
-  drs_result = drs_att(
-    outcome = outcome,
-    treatment = treatment,
-    f.out = f.out,
-    wgt = "ps_wgt",
-    data = boot_data,
-    verbose = FALSE
-  )
-
-  # Compute balance diagnostics using our std.diff function
-  avg_asd = NA_real_
-  max_asd = NA_real_
-  ess = NA_real_
-
+  # Wrap entire function in tryCatch to handle failures gracefully
   tryCatch(
     {
-      # Extract all covariates (exclude treatment, outcome, and weight)
-      covariate_cols = setdiff(
-        names(boot_data),
-        c(treatment, outcome, "ps_wgt")
+      # Resample data
+      boot_data = data[indices, ]
+
+      # Create binary treatment indicator
+      boot_data[[treatment]] = as.numeric(
+        boot_data[[treatment]] == treated_level
       )
 
-      if (length(covariate_cols) > 0) {
-        covariates = boot_data[, covariate_cols, drop = FALSE]
+      # Fit propensity score model
+      set.seed(seed_offset)
+      ps_fit = do.call(
+        "ps",
+        c(
+          list(
+            formula = f.ps,
+            data = boot_data,
+            estimand = "ATT",
+            stop.method = "es.mean",
+            verbose = FALSE
+          ),
+          gbm_params
+        )
+      )
 
-        # Ensure treatment is numeric 0/1
-        treat_vec = as.numeric(boot_data[[treatment]])
+      # Extract weights
+      boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
 
-        # Ensure weights are numeric
-        weights_vec = as.numeric(boot_data$ps_wgt)
+      # Compute AIPW estimate
+      aipw_result = aipw_att(
+        outcome = outcome,
+        treatment = treatment,
+        f.out = f.out,
+        wgt = "ps_wgt",
+        data = boot_data,
+        verbose = FALSE
+      )
 
-        # Check for valid weights
-        if (all(is.finite(weights_vec)) && all(weights_vec > 0)) {
-          # Compute standardized differences using our function
-          std_diffs = unlist(sapply(
-            covariates,
-            std.diff,
-            z = treat_vec,
-            w = weights_vec
-          ))
-          std_diffs = std_diffs[!is.na(std_diffs)]
+      # Compute DRS estimate
+      drs_result = drs_att(
+        outcome = outcome,
+        treatment = treatment,
+        f.out = f.out,
+        wgt = "ps_wgt",
+        data = boot_data,
+        verbose = FALSE
+      )
 
-          if (length(std_diffs) > 0) {
-            avg_asd = mean(std_diffs)
-            max_asd = max(std_diffs)
+      # Compute balance diagnostics using our std.diff function
+      avg_asd = NA_real_
+      max_asd = NA_real_
+      ess = NA_real_
+
+      tryCatch(
+        {
+          # Extract all covariates (exclude treatment, outcome, and weight)
+          covariate_cols = setdiff(
+            names(boot_data),
+            c(treatment, outcome, "ps_wgt")
+          )
+
+          if (length(covariate_cols) > 0) {
+            covariates = boot_data[, covariate_cols, drop = FALSE]
+
+            # Ensure treatment is numeric 0/1
+            treat_vec = as.numeric(boot_data[[treatment]])
+
+            # Ensure weights are numeric
+            weights_vec = as.numeric(boot_data$ps_wgt)
+
+            # Check for valid weights
+            if (all(is.finite(weights_vec)) && all(weights_vec > 0)) {
+              # Compute standardized differences using our function
+              std_diffs = unlist(sapply(
+                covariates,
+                std.diff,
+                z = treat_vec,
+                w = weights_vec
+              ))
+              std_diffs = std_diffs[!is.na(std_diffs)]
+
+              if (length(std_diffs) > 0) {
+                avg_asd = mean(std_diffs)
+                max_asd = max(std_diffs)
+              }
+
+              # Compute effective sample size
+              # ESS = (sum of weights)^2 / sum of weights^2
+              ess = sum(weights_vec)^2 / sum(weights_vec^2)
+            }
           }
-
-          # Compute effective sample size
-          # ESS = (sum of weights)^2 / sum of weights^2
-          ess = sum(weights_vec)^2 / sum(weights_vec^2)
+        },
+        error = function(e) {
+          # If calculation fails, leave as NA
         }
-      }
+      )
+
+      return(c(
+        aipw = aipw_result$att,
+        drs = drs_result$att,
+        avg_asd = avg_asd,
+        max_asd = max_asd,
+        ess = ess
+      ))
     },
     error = function(e) {
-      # If calculation fails, leave as NA
+      # Return NAs if anything fails during bootstrap iteration
+      return(c(
+        aipw = NA_real_,
+        drs = NA_real_,
+        avg_asd = NA_real_,
+        max_asd = NA_real_,
+        ess = NA_real_
+      ))
     }
   )
-
-  return(c(
-    aipw = aipw_result$att,
-    drs = drs_result$att,
-    avg_asd = avg_asd,
-    max_asd = max_asd,
-    ess = ess
-  ))
 }
 
 # Main bootstrap DR function
