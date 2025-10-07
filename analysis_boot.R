@@ -68,7 +68,7 @@ results_boot$model1_ord = DR_att_boot(
   n_cores = NULL,
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
-  ci_type = "all",
+  ci_type = "perc",
   sim = "ordinary"
 )
 
@@ -92,7 +92,7 @@ results_boot$model1_bal = DR_att_boot(
   n_cores = NULL,
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
-  ci_type = "all",
+  ci_type = "perc",
   sim = "balanced"
 )
 
@@ -116,7 +116,7 @@ results_boot$model2_ord = DR_att_boot(
   n_cores = NULL,
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
-  ci_type = "all",
+  ci_type = "perc",
   sim = "ordinary"
 )
 
@@ -140,7 +140,7 @@ results_boot$model2_bal = DR_att_boot(
   n_cores = NULL,
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
-  ci_type = "all",
+  ci_type = "perc",
   sim = "balanced"
 )
 
@@ -164,7 +164,7 @@ results_boot$model3_ord = DR_att_boot(
   n_cores = NULL,
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
-  ci_type = "all",
+  ci_type = "perc",
   sim = "ordinary"
 )
 
@@ -188,7 +188,7 @@ results_boot$model3_bal = DR_att_boot(
   n_cores = NULL,
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
-  ci_type = "all",
+  ci_type = "perc",
   sim = "balanced"
 )
 
@@ -212,7 +212,7 @@ results_boot$model4_ord = DR_att_boot(
   n_cores = NULL,
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
-  ci_type = "all",
+  ci_type = "perc",
   sim = "ordinary"
 )
 
@@ -236,7 +236,7 @@ results_boot$model4_bal = DR_att_boot(
   n_cores = NULL,
   plot_diagnostics = TRUE,
   bootstrap_method = "reweight",
-  ci_type = "all",
+  ci_type = "perc",
   sim = "balanced"
 )
 

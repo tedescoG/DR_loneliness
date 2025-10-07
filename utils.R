@@ -1311,8 +1311,8 @@ DR_att = function(
 
   if (verbose) {
     cat("\nPoint Estimates:\n")
-    cat(sprintf("  AIPW ATT: %.4f\n", aipw_point$att))
-    cat(sprintf("  DRS ATT:  %.4f\n\n", drs_point$att))
+    cat(sprintf("  AIPW ATT: %.4f\n", aipw_point_att))
+    cat(sprintf("  DRS ATT:  %.4f\n\n", drs_point_att))
   }
 
   # Bootstrap
@@ -1452,26 +1452,26 @@ DR_att = function(
   aipw_se = sd(aipw_boots)
   aipw_ci_percentile = quantile(aipw_boots, probs = c(0.025, 0.975))
   aipw_ci_normal = c(
-    aipw_point$att - 1.96 * aipw_se,
-    aipw_point$att + 1.96 * aipw_se
+    aipw_point_att - 1.96 * aipw_se,
+    aipw_point_att + 1.96 * aipw_se
   )
-  aipw_z = aipw_point$att / aipw_se
+  aipw_z = aipw_point_att / aipw_se
   aipw_pval = 2 * pnorm(-abs(aipw_z))
 
   # DRS
   drs_se = sd(drs_boots)
   drs_ci_percentile = quantile(drs_boots, probs = c(0.025, 0.975))
   drs_ci_normal = c(
-    drs_point$att - 1.96 * drs_se,
-    drs_point$att + 1.96 * drs_se
+    drs_point_att - 1.96 * drs_se,
+    drs_point_att + 1.96 * drs_se
   )
-  drs_z = drs_point$att / drs_se
+  drs_z = drs_point_att / drs_se
   drs_pval = 2 * pnorm(-abs(drs_z))
 
   # Print results
   if (verbose) {
     cat("\n=== AIPW Results ===\n")
-    cat(sprintf("ATT estimate:     %.4f\n", aipw_point$att))
+    cat(sprintf("ATT estimate:     %.4f\n", aipw_point_att))
     cat(sprintf("Standard error:   %.4f\n", aipw_se))
     cat(sprintf(
       "95%% CI (percentile): [%.4f, %.4f]\n",
@@ -1486,7 +1486,7 @@ DR_att = function(
     cat(sprintf("p-value:          %.4f\n", aipw_pval))
 
     cat("\n=== DRS Results ===\n")
-    cat(sprintf("ATT estimate:     %.4f\n", drs_point$att))
+    cat(sprintf("ATT estimate:     %.4f\n", drs_point_att))
     cat(sprintf("Standard error:   %.4f\n", drs_se))
     cat(sprintf(
       "95%% CI (percentile): [%.4f, %.4f]\n",
@@ -1571,7 +1571,7 @@ DR_att = function(
       border = "white",
       breaks = 30
     )
-    abline(v = aipw_point$att, col = "red", lwd = 2, lty = 2)
+    abline(v = aipw_point_att, col = "red", lwd = 2, lty = 2)
 
     # AIPW QQ-plot
     qqnorm(aipw_boots, main = "AIPW Q-Q Plot")
@@ -1586,7 +1586,7 @@ DR_att = function(
       border = "white",
       breaks = 30
     )
-    abline(v = drs_point$att, col = "red", lwd = 2, lty = 2)
+    abline(v = drs_point_att, col = "red", lwd = 2, lty = 2)
 
     # DRS QQ-plot
     qqnorm(drs_boots, main = "DRS Q-Q Plot")
@@ -1632,7 +1632,7 @@ DR_att = function(
   # Return results
   return(list(
     aipw = list(
-      att = aipw_point$att,
+      att = aipw_point_att,
       se = aipw_se,
       ci_percentile = aipw_ci_percentile,
       ci_normal = aipw_ci_normal,
@@ -1640,7 +1640,7 @@ DR_att = function(
       bootstrap_samples = aipw_boots
     ),
     drs = list(
-      att = drs_point$att,
+      att = drs_point_att,
       se = drs_se,
       ci_percentile = drs_ci_percentile,
       ci_normal = drs_ci_normal,
@@ -1657,8 +1657,16 @@ DR_att = function(
 # BOOTSTRAP DR ESTIMATORS (USING boot PACKAGE) ----------------------------------------####
 
 # Statistic function for boot() - resample method
-stat_resample_boot = function(data, indices, outcome, treatment, treated_level,
-                               control_level, f.out, wgt) {
+stat_resample_boot = function(
+  data,
+  indices,
+  outcome,
+  treatment,
+  treated_level,
+  control_level,
+  f.out,
+  wgt
+) {
   #' Statistic function for boot() using existing weights
   #'
   #' @param data data.frame - original dataset
@@ -1672,42 +1680,57 @@ stat_resample_boot = function(data, indices, outcome, treatment, treated_level,
   #'
   #' @return numeric vector with AIPW and DRS estimates
 
-  tryCatch({
-    # Resample data
-    boot_data = data[indices, ]
+  tryCatch(
+    {
+      # Resample data
+      boot_data = data[indices, ]
 
-    # Create binary treatment indicator
-    boot_data[[treatment]] = as.numeric(boot_data[[treatment]] == treated_level)
+      # Create binary treatment indicator
+      boot_data[[treatment]] = as.numeric(
+        boot_data[[treatment]] == treated_level
+      )
 
-    # Compute AIPW estimate
-    aipw_result = aipw_att(
-      outcome = outcome,
-      treatment = treatment,
-      f.out = f.out,
-      wgt = wgt,
-      data = boot_data,
-      verbose = FALSE
-    )
+      # Compute AIPW estimate
+      aipw_result = aipw_att(
+        outcome = outcome,
+        treatment = treatment,
+        f.out = f.out,
+        wgt = wgt,
+        data = boot_data,
+        verbose = FALSE
+      )
 
-    # Compute DRS estimate
-    drs_result = drs_att(
-      outcome = outcome,
-      treatment = treatment,
-      f.out = f.out,
-      wgt = wgt,
-      data = boot_data,
-      verbose = FALSE
-    )
+      # Compute DRS estimate
+      drs_result = drs_att(
+        outcome = outcome,
+        treatment = treatment,
+        f.out = f.out,
+        wgt = wgt,
+        data = boot_data,
+        verbose = FALSE
+      )
 
-    return(c(aipw = aipw_result$att, drs = drs_result$att))
-  }, error = function(e) {
-    return(c(aipw = NA_real_, drs = NA_real_))
-  })
+      return(c(aipw = aipw_result$att, drs = drs_result$att))
+    },
+    error = function(e) {
+      return(c(aipw = NA_real_, drs = NA_real_))
+    }
+  )
 }
 
 # Statistic function for boot() - reweight method
-stat_reweight_boot = function(data, indices, outcome, treatment, treated_level,
-                               control_level, f.ps, f.out, gbm_params, seed_offset) {
+stat_reweight_boot = function(
+  data,
+  indices,
+  outcome,
+  treatment,
+  treated_level,
+  control_level,
+  f.ps,
+  f.out,
+  gbm_params,
+  seed_offset
+) {
   #' Statistic function for boot() with PS re-estimation
   #'
   #' @param data data.frame - original dataset
@@ -1723,56 +1746,61 @@ stat_reweight_boot = function(data, indices, outcome, treatment, treated_level,
   #'
   #' @return numeric vector with AIPW and DRS estimates
 
-  tryCatch({
-    # Resample data
-    boot_data = data[indices, ]
+  tryCatch(
+    {
+      # Resample data
+      boot_data = data[indices, ]
 
-    # Create binary treatment indicator
-    boot_data[[treatment]] = as.numeric(boot_data[[treatment]] == treated_level)
-
-    # Fit propensity score model
-    set.seed(seed_offset)
-    ps_fit = do.call(
-      "ps",
-      c(
-        list(
-          formula = f.ps,
-          data = boot_data,
-          estimand = "ATT",
-          stop.method = "es.mean",
-          verbose = FALSE
-        ),
-        gbm_params
+      # Create binary treatment indicator
+      boot_data[[treatment]] = as.numeric(
+        boot_data[[treatment]] == treated_level
       )
-    )
 
-    # Extract weights
-    boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
+      # Fit propensity score model
+      set.seed(seed_offset)
+      ps_fit = do.call(
+        "ps",
+        c(
+          list(
+            formula = f.ps,
+            data = boot_data,
+            estimand = "ATT",
+            stop.method = "es.mean",
+            verbose = FALSE
+          ),
+          gbm_params
+        )
+      )
 
-    # Compute AIPW estimate
-    aipw_result = aipw_att(
-      outcome = outcome,
-      treatment = treatment,
-      f.out = f.out,
-      wgt = "ps_wgt",
-      data = boot_data,
-      verbose = FALSE
-    )
+      # Extract weights
+      boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
 
-    # Compute DRS estimate
-    drs_result = drs_att(
-      outcome = outcome,
-      treatment = treatment,
-      f.out = f.out,
-      wgt = "ps_wgt",
-      data = boot_data,
-      verbose = FALSE
-    )
+      # Compute AIPW estimate
+      aipw_result = aipw_att(
+        outcome = outcome,
+        treatment = treatment,
+        f.out = f.out,
+        wgt = "ps_wgt",
+        data = boot_data,
+        verbose = FALSE
+      )
 
-    return(c(aipw = aipw_result$att, drs = drs_result$att))
-  }, error = function(e) {
-    return(c(aipw = NA_real_, drs = NA_real_))
-  })
+      # Compute DRS estimate
+      drs_result = drs_att(
+        outcome = outcome,
+        treatment = treatment,
+        f.out = f.out,
+        wgt = "ps_wgt",
+        data = boot_data,
+        verbose = FALSE
+      )
+
+      return(c(aipw = aipw_result$att, drs = drs_result$att))
+    },
+    error = function(e) {
+      return(c(aipw = NA_real_, drs = NA_real_))
+    }
+  )
 }
 
 # Main bootstrap DR function using boot package
@@ -1885,40 +1913,6 @@ DR_att_boot = function(
     }
   }
 
-  # Point estimates on full sample
-  if (verbose) {
-    cat("Computing point estimates on full sample...\n")
-  }
-
-  # Create binary treatment for full sample
-  full_data = analysis_data
-  full_data[[treatment]] = as.numeric(full_data[[treatment]] == treated_level)
-
-  # Point estimates
-  aipw_point = aipw_att(
-    outcome = outcome,
-    treatment = treatment,
-    f.out = f.out,
-    wgt = wgt,
-    data = full_data,
-    verbose = FALSE
-  )
-
-  drs_point = drs_att(
-    outcome = outcome,
-    treatment = treatment,
-    f.out = f.out,
-    wgt = wgt,
-    data = full_data,
-    verbose = FALSE
-  )
-
-  if (verbose) {
-    cat("\nPoint Estimates:\n")
-    cat(sprintf("  AIPW ATT: %.4f\n", aipw_point$att))
-    cat(sprintf("  DRS ATT:  %.4f\n\n", drs_point$att))
-  }
-
   # Prepare strata for stratified bootstrap
   strata_vec = NULL
   if (stratified) {
@@ -1983,6 +1977,16 @@ DR_att_boot = function(
     )
   }
 
+  # Extract point estimates from boot object (t0)
+  aipw_point_att = boot_result$t0[1]
+  drs_point_att = boot_result$t0[2]
+
+  if (verbose) {
+    cat("\nPoint Estimates:\n")
+    cat(sprintf("  AIPW ATT: %.4f\n", aipw_point_att))
+    cat(sprintf("  DRS ATT:  %.4f\n\n", drs_point_att))
+  }
+
   # Extract bootstrap samples
   aipw_boots = boot_result$t[, 1]
   drs_boots = boot_result$t[, 2]
@@ -2015,89 +2019,153 @@ DR_att_boot = function(
   }
 
   # Compute CIs for AIPW (index = 1)
-  aipw_ci = tryCatch({
-    boot::boot.ci(boot_result_filtered, type = ci_types_to_compute, index = 1)
-  }, error = function(e) {
-    warning("boot.ci() failed for AIPW, falling back to manual computation")
-    NULL
-  })
+  aipw_ci = tryCatch(
+    {
+      boot::boot.ci(boot_result_filtered, type = ci_types_to_compute, index = 1)
+    },
+    error = function(e) {
+      warning("boot.ci() failed for AIPW, falling back to manual computation")
+      NULL
+    }
+  )
 
   # Compute CIs for DRS (index = 2)
-  drs_ci = tryCatch({
-    boot::boot.ci(boot_result_filtered, type = ci_types_to_compute, index = 2)
-  }, error = function(e) {
-    warning("boot.ci() failed for DRS, falling back to manual computation")
-    NULL
-  })
+  drs_ci = tryCatch(
+    {
+      boot::boot.ci(boot_result_filtered, type = ci_types_to_compute, index = 2)
+    },
+    error = function(e) {
+      warning("boot.ci() failed for DRS, falling back to manual computation")
+      NULL
+    }
+  )
 
   # Extract CIs or fall back to manual computation
   if (!is.null(aipw_ci)) {
-    aipw_ci_normal = if ("normal" %in% names(aipw_ci)) aipw_ci$normal[2:3] else c(aipw_point$att - 1.96 * aipw_se, aipw_point$att + 1.96 * aipw_se)
-    aipw_ci_basic = if ("basic" %in% names(aipw_ci)) aipw_ci$basic[4:5] else NULL
-    aipw_ci_percentile = if ("percent" %in% names(aipw_ci)) aipw_ci$percent[4:5] else quantile(aipw_boots, probs = c(0.025, 0.975))
+    aipw_ci_normal = if ("normal" %in% names(aipw_ci)) {
+      aipw_ci$normal[2:3]
+    } else {
+      c(aipw_point_att - 1.96 * aipw_se, aipw_point_att + 1.96 * aipw_se)
+    }
+    aipw_ci_basic = if ("basic" %in% names(aipw_ci)) {
+      aipw_ci$basic[4:5]
+    } else {
+      NULL
+    }
+    aipw_ci_percentile = if ("percent" %in% names(aipw_ci)) {
+      aipw_ci$percent[4:5]
+    } else {
+      quantile(aipw_boots, probs = c(0.025, 0.975))
+    }
     aipw_ci_bca = if ("bca" %in% names(aipw_ci)) aipw_ci$bca[4:5] else NULL
   } else {
-    aipw_ci_normal = c(aipw_point$att - 1.96 * aipw_se, aipw_point$att + 1.96 * aipw_se)
+    aipw_ci_normal = c(
+      aipw_point_att - 1.96 * aipw_se,
+      aipw_point_att + 1.96 * aipw_se
+    )
     aipw_ci_basic = NULL
     aipw_ci_percentile = quantile(aipw_boots, probs = c(0.025, 0.975))
     aipw_ci_bca = NULL
   }
 
   if (!is.null(drs_ci)) {
-    drs_ci_normal = if ("normal" %in% names(drs_ci)) drs_ci$normal[2:3] else c(drs_point$att - 1.96 * drs_se, drs_point$att + 1.96 * drs_se)
+    drs_ci_normal = if ("normal" %in% names(drs_ci)) {
+      drs_ci$normal[2:3]
+    } else {
+      c(drs_point_att - 1.96 * drs_se, drs_point_att + 1.96 * drs_se)
+    }
     drs_ci_basic = if ("basic" %in% names(drs_ci)) drs_ci$basic[4:5] else NULL
-    drs_ci_percentile = if ("percent" %in% names(drs_ci)) drs_ci$percent[4:5] else quantile(drs_boots, probs = c(0.025, 0.975))
+    drs_ci_percentile = if ("percent" %in% names(drs_ci)) {
+      drs_ci$percent[4:5]
+    } else {
+      quantile(drs_boots, probs = c(0.025, 0.975))
+    }
     drs_ci_bca = if ("bca" %in% names(drs_ci)) drs_ci$bca[4:5] else NULL
   } else {
-    drs_ci_normal = c(drs_point$att - 1.96 * drs_se, drs_point$att + 1.96 * drs_se)
+    drs_ci_normal = c(
+      drs_point_att - 1.96 * drs_se,
+      drs_point_att + 1.96 * drs_se
+    )
     drs_ci_basic = NULL
     drs_ci_percentile = quantile(drs_boots, probs = c(0.025, 0.975))
     drs_ci_bca = NULL
   }
 
   # Compute p-values using normal approximation
-  aipw_z = aipw_point$att / aipw_se
+  aipw_z = aipw_point_att / aipw_se
   aipw_pval = 2 * pnorm(-abs(aipw_z))
 
-  drs_z = drs_point$att / drs_se
+  drs_z = drs_point_att / drs_se
   drs_pval = 2 * pnorm(-abs(drs_z))
 
   # Print results
   if (verbose) {
     cat("\n=== AIPW Results ===\n")
-    cat(sprintf("ATT estimate:     %.4f\n", aipw_point$att))
+    cat(sprintf("ATT estimate:     %.4f\n", aipw_point_att))
     cat(sprintf("Standard error:   %.4f\n", aipw_se))
     cat(sprintf("p-value:          %.4f\n", aipw_pval))
     cat("\nConfidence Intervals (95%):\n")
     if (!is.null(aipw_ci_normal)) {
-      cat(sprintf("  Normal:      [%.4f, %.4f]\n", aipw_ci_normal[1], aipw_ci_normal[2]))
+      cat(sprintf(
+        "  Normal:      [%.4f, %.4f]\n",
+        aipw_ci_normal[1],
+        aipw_ci_normal[2]
+      ))
     }
     if (!is.null(aipw_ci_basic)) {
-      cat(sprintf("  Basic:       [%.4f, %.4f]\n", aipw_ci_basic[1], aipw_ci_basic[2]))
+      cat(sprintf(
+        "  Basic:       [%.4f, %.4f]\n",
+        aipw_ci_basic[1],
+        aipw_ci_basic[2]
+      ))
     }
     if (!is.null(aipw_ci_percentile)) {
-      cat(sprintf("  Percentile:  [%.4f, %.4f]\n", aipw_ci_percentile[1], aipw_ci_percentile[2]))
+      cat(sprintf(
+        "  Percentile:  [%.4f, %.4f]\n",
+        aipw_ci_percentile[1],
+        aipw_ci_percentile[2]
+      ))
     }
     if (!is.null(aipw_ci_bca)) {
-      cat(sprintf("  BCa:         [%.4f, %.4f]\n", aipw_ci_bca[1], aipw_ci_bca[2]))
+      cat(sprintf(
+        "  BCa:         [%.4f, %.4f]\n",
+        aipw_ci_bca[1],
+        aipw_ci_bca[2]
+      ))
     }
 
     cat("\n=== DRS Results ===\n")
-    cat(sprintf("ATT estimate:     %.4f\n", drs_point$att))
+    cat(sprintf("ATT estimate:     %.4f\n", drs_point_att))
     cat(sprintf("Standard error:   %.4f\n", drs_se))
     cat(sprintf("p-value:          %.4f\n", drs_pval))
     cat("\nConfidence Intervals (95%):\n")
     if (!is.null(drs_ci_normal)) {
-      cat(sprintf("  Normal:      [%.4f, %.4f]\n", drs_ci_normal[1], drs_ci_normal[2]))
+      cat(sprintf(
+        "  Normal:      [%.4f, %.4f]\n",
+        drs_ci_normal[1],
+        drs_ci_normal[2]
+      ))
     }
     if (!is.null(drs_ci_basic)) {
-      cat(sprintf("  Basic:       [%.4f, %.4f]\n", drs_ci_basic[1], drs_ci_basic[2]))
+      cat(sprintf(
+        "  Basic:       [%.4f, %.4f]\n",
+        drs_ci_basic[1],
+        drs_ci_basic[2]
+      ))
     }
     if (!is.null(drs_ci_percentile)) {
-      cat(sprintf("  Percentile:  [%.4f, %.4f]\n", drs_ci_percentile[1], drs_ci_percentile[2]))
+      cat(sprintf(
+        "  Percentile:  [%.4f, %.4f]\n",
+        drs_ci_percentile[1],
+        drs_ci_percentile[2]
+      ))
     }
     if (!is.null(drs_ci_bca)) {
-      cat(sprintf("  BCa:         [%.4f, %.4f]\n", drs_ci_bca[1], drs_ci_bca[2]))
+      cat(sprintf(
+        "  BCa:         [%.4f, %.4f]\n",
+        drs_ci_bca[1],
+        drs_ci_bca[2]
+      ))
     }
   }
 
@@ -2114,7 +2182,7 @@ DR_att_boot = function(
       border = "white",
       breaks = 30
     )
-    abline(v = aipw_point$att, col = "red", lwd = 2, lty = 2)
+    abline(v = aipw_point_att, col = "red", lwd = 2, lty = 2)
 
     # AIPW QQ-plot
     qqnorm(aipw_boots, main = "AIPW Q-Q Plot")
@@ -2129,7 +2197,7 @@ DR_att_boot = function(
       border = "white",
       breaks = 30
     )
-    abline(v = drs_point$att, col = "red", lwd = 2, lty = 2)
+    abline(v = drs_point_att, col = "red", lwd = 2, lty = 2)
 
     # DRS QQ-plot
     qqnorm(drs_boots, main = "DRS Q-Q Plot")
@@ -2141,7 +2209,7 @@ DR_att_boot = function(
   # Return results (compatible with original DR_att format, with additional CI types)
   return(list(
     aipw = list(
-      att = aipw_point$att,
+      att = aipw_point_att,
       se = aipw_se,
       ci_normal = aipw_ci_normal,
       ci_basic = aipw_ci_basic,
@@ -2152,7 +2220,7 @@ DR_att_boot = function(
       boot_ci_object = aipw_ci
     ),
     drs = list(
-      att = drs_point$att,
+      att = drs_point_att,
       se = drs_se,
       ci_normal = drs_ci_normal,
       ci_basic = drs_ci_basic,
@@ -2164,7 +2232,7 @@ DR_att_boot = function(
     ),
     n_boot = length(aipw_boots),
     n_failed = n_failed,
-    boot_object = boot_result  # Include boot object for additional analyses
+    boot_object = boot_result # Include boot object for additional analyses
   ))
 }
 
