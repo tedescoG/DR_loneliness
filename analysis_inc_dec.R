@@ -65,7 +65,7 @@ results$model1_reweight = DR_att(
   f.out = outcome_formula_1,
   data = d,
   gbm_params = gbm_inc_dec,
-  n_boot = 1000,
+  n_boot = 2000,
   seed = run,
   verbose = TRUE,
   parallel = TRUE,
@@ -87,7 +87,7 @@ results$model2_reweight = DR_att(
   f.out = outcome_formula_2,
   data = d,
   gbm_params = gbm_inc_dec,
-  n_boot = 1000,
+  n_boot = 2000,
   seed = run,
   verbose = TRUE,
   parallel = TRUE,
@@ -109,7 +109,7 @@ results$model3_reweight = DR_att(
   f.out = outcome_formula_3,
   data = d,
   gbm_params = gbm_inc_dec,
-  n_boot = 1000,
+  n_boot = 2000,
   seed = run,
   verbose = TRUE,
   parallel = TRUE,
@@ -131,7 +131,7 @@ results$model4_reweight = DR_att(
   f.out = outcome_formula_4,
   data = d,
   gbm_params = gbm_inc_dec,
-  n_boot = 1000,
+  n_boot = 2000,
   seed = run,
   verbose = TRUE,
   parallel = TRUE,
@@ -224,13 +224,25 @@ cat("\n\nSAVING RESULTS:\n")
 cat("---------------\n")
 
 # Save all individual results
-saveRDS(results$model1_reweight, "results/outcome/inc_dec/model1_reweight.rds")
-saveRDS(results$model2_reweight, "results/outcome/inc_dec/model2_reweight.rds")
-saveRDS(results$model3_reweight, "results/outcome/inc_dec/model3_reweight.rds")
-saveRDS(results$model4_reweight, "results/outcome/inc_dec/model4_reweight.rds")
+saveRDS(
+  results$model1_reweight,
+  "results/outcome/reweight/test/model1_reweight.rds"
+)
+saveRDS(
+  results$model2_reweight,
+  "results/outcome/reweight/test/model2_reweight.rds"
+)
+saveRDS(
+  results$model3_reweight,
+  "results/outcome/reweight/test/model3_reweight.rds"
+)
+saveRDS(
+  results$model4_reweight,
+  "results/outcome/reweight/test/model4_reweight.rds"
+)
 
 # Save entire results list
-saveRDS(results, "results/outcome/inc_dec/reweight_results.rds")
+saveRDS(results, "results/outcome/reweight/test/reweight_results.rds")
 
 # Create comprehensive summary table with balance diagnostics
 summary_table = data.frame(
@@ -370,7 +382,7 @@ print(summary_table)
 # Save as CSV
 write.csv(
   summary_table,
-  "results/outcome/inc_dec/reweight_summary.csv",
+  "results/outcome/reweight/test/reweight_summary.csv",
   row.names = FALSE
 )
 

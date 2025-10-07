@@ -9,7 +9,7 @@ run = 123
 source("utils.R")
 
 # Load data
-d = readRDS("data/data_iptw.rds")
+d = readRDS("data/data_iptw2.rds")
 
 # Define propensity score formula
 ps_formula = as.formula(
@@ -21,14 +21,14 @@ ps_formula = as.formula(
       income +
       marital +
       coliving +
-      change_res +
-      kinless +
+      #change_res +
+      #kinless +
       health_pre +
       chronic +
       death_due_covid +
       ppl_infected +
       income_loss +
-      job_loss +
+      #job_loss +
       neighborhood +
       baseline_depr +
       baseline_lone
@@ -42,9 +42,9 @@ outcome_formula_2 = "baseline_lone "
 outcome_formula_3 = "baseline_lone + baseline_depr "
 
 outcome_formula_4 = "baseline_lone + baseline_depr + female + age_cat + edu +
-                     emp_status + income + marital + coliving + change_res +
-                     kinless + health_pre + chronic + death_due_covid +
-                     ppl_infected + income_loss + job_loss + neighborhood"
+                     emp_status + income + marital + coliving + health_pre + 
+                     chronic + death_due_covid +
+                     ppl_infected + income_loss + neighborhood"
 
 
 # Tuned parameters for GBM - Increase vs Mix
@@ -65,9 +65,9 @@ results$model1_reweight = DR_att(
   f.ps = ps_formula,
   f.out = outcome_formula_1,
   data = d,
-  ps_params = gbm_inc_mix,
-  n_boot = 500,
-  seed = run + 1000, # Different seed offset for reweight method
+  gbm_params = gbm_inc_mix,
+  n_boot = 1000,
+  seed = run, # Different seed offset for reweight method
   verbose = TRUE,
   parallel = TRUE,
   n_cores = NULL,
@@ -87,9 +87,9 @@ results$model2_reweight = DR_att(
   f.ps = ps_formula,
   f.out = outcome_formula_2,
   data = d,
-  ps_params = gbm_inc_mix,
-  n_boot = 500,
-  seed = run + 1000,
+  gbm_params = gbm_inc_mix,
+  n_boot = 1000,
+  seed = run,
   verbose = TRUE,
   parallel = TRUE,
   n_cores = NULL,
@@ -110,9 +110,9 @@ results$model3_reweight = DR_att(
   f.ps = ps_formula,
   f.out = outcome_formula_3,
   data = d,
-  ps_params = gbm_inc_mix,
-  n_boot = 500,
-  seed = run + 1000,
+  gbm_params = gbm_inc_mix,
+  n_boot = 1000,
+  seed = run,
   verbose = TRUE,
   parallel = TRUE,
   n_cores = NULL,
@@ -133,9 +133,9 @@ results$model4_reweight = DR_att(
   f.ps = ps_formula,
   f.out = outcome_formula_4,
   data = d,
-  ps_params = gbm_inc_mix,
-  n_boot = 500,
-  seed = run + 1000,
+  gbm_params = gbm_inc_mix,
+  n_boot = 1000,
+  seed = run,
   verbose = TRUE,
   parallel = TRUE,
   n_cores = NULL,
@@ -384,17 +384,38 @@ cat("\n\nSAVING RESULTS:\n")
 cat("---------------\n")
 
 # Save all individual results
-saveRDS(results$model1_resample, "results/outcome/inc_mix/model1_resample.rds")
+saveRDS(
+  results$model1_resample,
+  "results/outcome/reweight/test_inc_mix/model1_resample.rds"
+)
 saveRDS(results$model1_reweight, "results/outcome/inc_mix/model1_reweight.rds")
-saveRDS(results$model2_resample, "results/outcome/inc_mix/model2_resample.rds")
-saveRDS(results$model2_reweight, "results/outcome/inc_mix/model2_reweight.rds")
-saveRDS(results$model3_resample, "results/outcome/inc_mix/model3_resample.rds")
-saveRDS(results$model3_reweight, "results/outcome/inc_mix/model3_reweight.rds")
-saveRDS(results$model4_resample, "results/outcome/inc_mix/model4_resample.rds")
-saveRDS(results$model4_reweight, "results/outcome/inc_mix/model4_reweight.rds")
+saveRDS(
+  results$model2_resample,
+  "results/outcome/reweight/test_inc_mix/model2_resample.rds"
+)
+saveRDS(
+  results$model2_reweight,
+  "results/outcome/reweight/test_inc_mix/model2_reweight.rds"
+)
+saveRDS(
+  results$model3_resample,
+  "results/outcome/reweight/test_inc_mix/model3_resample.rds"
+)
+saveRDS(
+  results$model3_reweight,
+  "results/outcome/reweight/test_inc_mix/model3_reweight.rds"
+)
+saveRDS(
+  results$model4_resample,
+  "results/outcome/reweight/test_inc_mix/model4_resample.rds"
+)
+saveRDS(
+  results$model4_reweight,
+  "results/outcome/reweight/test_inc_mix/model4_reweight.rds"
+)
 
 # Save entire results list
-saveRDS(results, "results/outcome/inc_mix/all_results.rds")
+saveRDS(results, "results/outcome/reweight/test_inc_mix/all_results.rds")
 
 # Create comprehensive summary table with balance diagnostics
 summary_table = data.frame(
@@ -634,7 +655,7 @@ print(summary_table)
 # Save as CSV
 write.csv(
   summary_table,
-  "results/outcome/inc_mix/bootstrap_DR_summary.csv",
+  "results/outcome/reweight/test_inc_mix/bootstrap_DR_summary.csv",
   row.names = FALSE
 )
 
