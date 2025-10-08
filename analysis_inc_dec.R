@@ -76,7 +76,7 @@ results = list()
 # -----------------------------------------------------------------------------
 
 results$model1_reweight = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "decrease",
@@ -103,7 +103,7 @@ results$model1_reweight = DR_att(
 # -----------------------------------------------------------------------------
 
 results$model2_reweight = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "decrease",
@@ -130,7 +130,7 @@ results$model2_reweight = DR_att(
 # -----------------------------------------------------------------------------
 
 results$model3_reweight = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "decrease",
@@ -157,7 +157,7 @@ results$model3_reweight = DR_att(
 # -----------------------------------------------------------------------------
 
 results$model4_reweight = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "decrease",

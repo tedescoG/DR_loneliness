@@ -57,12 +57,20 @@ k_folds = 5 # Number of folds for cross-fitting
 # COMPARISON 1: INCREASE VS DECREASE
 # =============================================================================
 
-cat("\n=============================================================================\n")
+cat(
+  "\n=============================================================================\n"
+)
 cat("STARTING ANALYSIS: INCREASE VS DECREASE (CROSS-FITTED)\n")
-cat("=============================================================================\n\n")
+cat(
+  "=============================================================================\n\n"
+)
 
 # Create output directories
-dir.create("results/outcome/crossfitting/inc_dec", showWarnings = FALSE, recursive = TRUE)
+dir.create(
+  "results/outcome/crossfitting/inc_dec",
+  showWarnings = FALSE,
+  recursive = TRUE
+)
 dir.create(
   "results/outcome/crossfitting/inc_dec/figures",
   showWarnings = FALSE,
@@ -80,7 +88,7 @@ results_inc_dec = list()
 # -----------------------------------------------------------------------------
 
 results_inc_dec$model1_cf = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "decrease",
@@ -109,7 +117,7 @@ results_inc_dec$model1_cf = DR_att(
 # -----------------------------------------------------------------------------
 
 results_inc_dec$model2_cf = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "decrease",
@@ -138,7 +146,7 @@ results_inc_dec$model2_cf = DR_att(
 # -----------------------------------------------------------------------------
 
 results_inc_dec$model3_cf = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "decrease",
@@ -167,7 +175,7 @@ results_inc_dec$model3_cf = DR_att(
 # -----------------------------------------------------------------------------
 
 results_inc_dec$model4_cf = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "decrease",
@@ -280,7 +288,9 @@ legend(
 par(mfrow = c(1, 1))
 dev.off()
 
-cat("Comparison plot saved to: results/outcome/crossfitting/inc_dec/figures/model_comparison_distributions.png\n")
+cat(
+  "Comparison plot saved to: results/outcome/crossfitting/inc_dec/figures/model_comparison_distributions.png\n"
+)
 
 # -----------------------------------------------------------------------------
 # SUMMARY TABLES - INC_DEC
@@ -366,7 +376,10 @@ cat("\n=== INC_DEC BALANCE TABLE ===\n")
 print(balance_table_inc_dec, digits = 4)
 
 # Save results
-saveRDS(results_inc_dec, "results/outcome/crossfitting/inc_dec/complete_results.rds")
+saveRDS(
+  results_inc_dec,
+  "results/outcome/crossfitting/inc_dec/complete_results.rds"
+)
 
 write.csv(
   summary_table_inc_dec,
@@ -381,23 +394,45 @@ write.csv(
 )
 
 # Save individual model results
-saveRDS(results_inc_dec$model1_cf, "results/outcome/crossfitting/inc_dec/model1_cf.rds")
-saveRDS(results_inc_dec$model2_cf, "results/outcome/crossfitting/inc_dec/model2_cf.rds")
-saveRDS(results_inc_dec$model3_cf, "results/outcome/crossfitting/inc_dec/model3_cf.rds")
-saveRDS(results_inc_dec$model4_cf, "results/outcome/crossfitting/inc_dec/model4_cf.rds")
+saveRDS(
+  results_inc_dec$model1_cf,
+  "results/outcome/crossfitting/inc_dec/model1_cf.rds"
+)
+saveRDS(
+  results_inc_dec$model2_cf,
+  "results/outcome/crossfitting/inc_dec/model2_cf.rds"
+)
+saveRDS(
+  results_inc_dec$model3_cf,
+  "results/outcome/crossfitting/inc_dec/model3_cf.rds"
+)
+saveRDS(
+  results_inc_dec$model4_cf,
+  "results/outcome/crossfitting/inc_dec/model4_cf.rds"
+)
 
-cat("\nINC_DEC analysis complete. Results saved to: results/outcome/crossfitting/inc_dec/\n\n")
+cat(
+  "\nINC_DEC analysis complete. Results saved to: results/outcome/crossfitting/inc_dec/\n\n"
+)
 
 # =============================================================================
 # COMPARISON 2: INCREASE VS MIX
 # =============================================================================
 
-cat("\n=============================================================================\n")
+cat(
+  "\n=============================================================================\n"
+)
 cat("STARTING ANALYSIS: INCREASE VS MIX (CROSS-FITTED)\n")
-cat("=============================================================================\n\n")
+cat(
+  "=============================================================================\n\n"
+)
 
 # Create output directories
-dir.create("results/outcome/crossfitting/inc_mix", showWarnings = FALSE, recursive = TRUE)
+dir.create(
+  "results/outcome/crossfitting/inc_mix",
+  showWarnings = FALSE,
+  recursive = TRUE
+)
 dir.create(
   "results/outcome/crossfitting/inc_mix/figures",
   showWarnings = FALSE,
@@ -415,7 +450,7 @@ results_inc_mix = list()
 # -----------------------------------------------------------------------------
 
 results_inc_mix$model1_cf = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "mix",
@@ -444,7 +479,7 @@ results_inc_mix$model1_cf = DR_att(
 # -----------------------------------------------------------------------------
 
 results_inc_mix$model2_cf = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "mix",
@@ -473,7 +508,7 @@ results_inc_mix$model2_cf = DR_att(
 # -----------------------------------------------------------------------------
 
 results_inc_mix$model3_cf = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "mix",
@@ -502,7 +537,7 @@ results_inc_mix$model3_cf = DR_att(
 # -----------------------------------------------------------------------------
 
 results_inc_mix$model4_cf = DR_att(
-  outcome = "severe_loneliness",
+  outcome = "loneliness",
   treatment = "remote_contact",
   treated_level = "increase",
   control_level = "mix",
@@ -615,7 +650,9 @@ legend(
 par(mfrow = c(1, 1))
 dev.off()
 
-cat("Comparison plot saved to: results/outcome/crossfitting/inc_mix/figures/model_comparison_distributions.png\n")
+cat(
+  "Comparison plot saved to: results/outcome/crossfitting/inc_mix/figures/model_comparison_distributions.png\n"
+)
 
 # -----------------------------------------------------------------------------
 # SUMMARY TABLES - INC_MIX
@@ -701,7 +738,10 @@ cat("\n=== INC_MIX BALANCE TABLE ===\n")
 print(balance_table_inc_mix, digits = 4)
 
 # Save results
-saveRDS(results_inc_mix, "results/outcome/crossfitting/inc_mix/complete_results.rds")
+saveRDS(
+  results_inc_mix,
+  "results/outcome/crossfitting/inc_mix/complete_results.rds"
+)
 
 write.csv(
   summary_table_inc_mix,
@@ -716,20 +756,38 @@ write.csv(
 )
 
 # Save individual model results
-saveRDS(results_inc_mix$model1_cf, "results/outcome/crossfitting/inc_mix/model1_cf.rds")
-saveRDS(results_inc_mix$model2_cf, "results/outcome/crossfitting/inc_mix/model2_cf.rds")
-saveRDS(results_inc_mix$model3_cf, "results/outcome/crossfitting/inc_mix/model3_cf.rds")
-saveRDS(results_inc_mix$model4_cf, "results/outcome/crossfitting/inc_mix/model4_cf.rds")
+saveRDS(
+  results_inc_mix$model1_cf,
+  "results/outcome/crossfitting/inc_mix/model1_cf.rds"
+)
+saveRDS(
+  results_inc_mix$model2_cf,
+  "results/outcome/crossfitting/inc_mix/model2_cf.rds"
+)
+saveRDS(
+  results_inc_mix$model3_cf,
+  "results/outcome/crossfitting/inc_mix/model3_cf.rds"
+)
+saveRDS(
+  results_inc_mix$model4_cf,
+  "results/outcome/crossfitting/inc_mix/model4_cf.rds"
+)
 
-cat("\nINC_MIX analysis complete. Results saved to: results/outcome/crossfitting/inc_mix/\n\n")
+cat(
+  "\nINC_MIX analysis complete. Results saved to: results/outcome/crossfitting/inc_mix/\n\n"
+)
 
 # =============================================================================
 # ALL ANALYSES COMPLETE
 # =============================================================================
 
-cat("\n=============================================================================\n")
+cat(
+  "\n=============================================================================\n"
+)
 cat("ALL CROSS-FITTED ANALYSES COMPLETE\n")
-cat("=============================================================================\n")
+cat(
+  "=============================================================================\n"
+)
 cat("\nResults saved to:\n")
 cat("  - results/outcome/crossfitting/inc_dec/\n")
 cat("  - results/outcome/crossfitting/inc_mix/\n\n")

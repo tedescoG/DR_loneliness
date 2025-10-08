@@ -59,7 +59,7 @@ system.time({
     x = inc_dec %>%
       select(
         -c(
-          "severe_loneliness",
+          "loneliness",
           "remote_contact"
         )
       ),
@@ -166,7 +166,7 @@ system.time({
     x = inc_mix %>%
       select(
         -c(
-          "severe_loneliness",
+          "loneliness",
           "remote_contact",
         )
       ),

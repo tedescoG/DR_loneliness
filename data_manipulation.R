@@ -142,8 +142,8 @@ neighborhood = factor(
 
 # OUTCOME: severe lonliness
 table(df$C3, useNA = "ifany")
-severe_loneliness = ifelse(df$C3 %in% c(4, 3), 1, 0)
-table(severe_loneliness)
+loneliness = ifelse(df$C3 %in% c(4, 3), 1, 0)
+table(loneliness)
 
 
 # MULTINOMIAL TREATMENT: remote contact pattern
@@ -201,7 +201,7 @@ data_clean = data.frame(
   neighborhood,
   baseline_depr,
   baseline_lone,
-  severe_loneliness,
+  loneliness,
   remote_contact
 ) %>%
   filter(age_cat %in% c("50-59", "60-69", "70+")) %>%
