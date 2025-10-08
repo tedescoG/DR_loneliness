@@ -512,7 +512,7 @@ aipw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   ))
 }
 
-# Cross-fitted AIPW -------------------------------------------------------------------####
+## Cross-fitted AIPW -------------------------------------------------------------------####
 cf_aipw_att = function(
   outcome,
   treatment,
@@ -731,7 +731,7 @@ drs_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   ))
 }
 
-# Cross-fitted DRS Estimator
+## Cross-fitted DRS -------------------------------------------------------------------####
 cf_drs_att = function(
   outcome,
   treatment,
@@ -1260,7 +1260,7 @@ boot_iter = function(
 }
 
 
-# UNIFIED DR_ATT FUNCTION --------------------------------------------------------------####
+# DR ATT ANALYSIS FUNCTION -------------------------------------------------------------####
 
 DR_att = function(
   outcome,
@@ -1881,7 +1881,7 @@ DR_att = function(
   ))
 }
 
-# Helper function to extract results
+# HELPER X RESULTS ---------------------------------------------------------------------####
 extract_results = function(result, model_num, method, estimator) {
   est = result[[tolower(estimator)]]
 
@@ -1921,16 +1921,18 @@ extract_balance = function(result, model_num, method) {
   }
 }
 
-plot_model_comparison <- function(results,
-                                   save_path,
-                                   width = 3000,
-                                   height = 2000,
-                                   res = 300,
-                                   method = "reweight",
-                                   colors = c("blue", "red", "green", "purple"),
-                                   ylim_padding = 1.05,
-                                   aipw_title = "AIPW: Reweight Method",
-                                   drs_title = "DRS: Reweight Method") {
+plot_model_comparison <- function(
+  results,
+  save_path,
+  width = 3000,
+  height = 2000,
+  res = 300,
+  method = "reweight",
+  colors = c("blue", "red", "green", "purple"),
+  ylim_padding = 1.05,
+  aipw_title = "AIPW: Reweight Method",
+  drs_title = "DRS: Reweight Method"
+) {
   #' Plot Model Comparison Distributions
   #'
   #' Creates a comparison plot of bootstrap distributions for multiple models,
