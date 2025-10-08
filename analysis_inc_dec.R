@@ -203,8 +203,7 @@ plot_bootstrap_histograms(
     model3_reweight = results$model3_reweight,
     model4_reweight = results$model4_reweight
   ),
-  save_path = "results/outcome/inc_dec/figures/bootstrap_histograms.png",
-  comparison_label = "Inc vs Dec"
+  save_path = "results/outcome/inc_dec/figures/bootstrap_histograms.png"
 )
 
 

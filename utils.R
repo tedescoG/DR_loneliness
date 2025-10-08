@@ -2062,7 +2062,6 @@ plot_model_comparison <- function(
 plot_bootstrap_histograms <- function(
   results,
   save_path,
-  comparison_label = "Inc vs Dec",
   width = 3000,
   height = 2000,
   res = 300,
@@ -2071,13 +2070,12 @@ plot_bootstrap_histograms <- function(
   #' Plot Bootstrap Distribution Histograms for All Models
   #'
   #' Creates a 2x4 grid of histograms showing bootstrap distributions for
-  #' CF-DRS (top row) and CF-AIPW (bottom row) across 4 models.
+  #' DRS (top row) and AIPW (bottom row) across 4 models.
   #' Each histogram shows the distribution with a vertical red dashed line at the point estimate.
   #'
   #' @param results A list of model results (model1_reweight, model2_reweight, etc.),
-  #'   each containing `aipw` and `drs` components with `bootstrap_samples` and `estimate`
+  #'   each containing `aipw` and `drs` components with `bootstrap_samples` and `att`
   #' @param save_path Path where the plot should be saved (PNG format)
-  #' @param comparison_label Label for the comparison (e.g., "Inc vs Dec", "Inc vs Mix")
   #' @param width Plot width in pixels (default: 3000)
   #' @param height Plot height in pixels (default: 2000)
   #' @param res Resolution in DPI (default: 300)
@@ -2095,34 +2093,34 @@ plot_bootstrap_histograms <- function(
   create_plot <- function() {
     par(mfrow = c(2, 4), mar = c(4, 4, 3, 1))
 
-    # Top row: CF-DRS
+    # Top row: DRS
     for (i in 1:4) {
       drs_samples <- results[[i]]$drs$bootstrap_samples
-      drs_estimate <- results[[i]]$drs$estimate
+      drs_estimate <- results[[i]]$drs$att
 
       hist(
         drs_samples,
         breaks = ncol_breaks,
         col = "lightgreen",
         border = "black",
-        main = paste0("CF-DRS Model ", i, " - ", comparison_label),
+        main = paste0("DRS Model ", i),
         xlab = "ATT",
         ylab = "Frequency"
       )
       abline(v = drs_estimate, col = "red", lwd = 2, lty = 2)
     }
 
-    # Bottom row: CF-AIPW
+    # Bottom row: AIPW
     for (i in 1:4) {
       aipw_samples <- results[[i]]$aipw$bootstrap_samples
-      aipw_estimate <- results[[i]]$aipw$estimate
+      aipw_estimate <- results[[i]]$aipw$att
 
       hist(
         aipw_samples,
         breaks = ncol_breaks,
         col = "lightblue",
         border = "black",
-        main = paste0("CF-AIPW Model ", i, " - ", comparison_label),
+        main = paste0("AIPW Model ", i),
         xlab = "ATT",
         ylab = "Frequency"
       )
