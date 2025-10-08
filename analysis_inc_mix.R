@@ -61,7 +61,7 @@ outcome_formula_4 = "baseline_lone + baseline_depr + female + age_cat + edu +
 gbm_params = readRDS("results/weighting/inc_mix_params.rds")
 
 # Bootstrap parameters
-n_boot = 2000
+n_boot = 5000
 n_cores = NULL # Auto-detect
 
 # Store results

@@ -1047,8 +1047,9 @@ boot_iter = function(
         N1 = sum(Z)
 
         # Create K folds with stratification
+        # Use indices to create unique seed for each bootstrap iteration
         stratify_var = if (stratify_folds) treatment else NULL
-        set.seed(seed_offset)
+        set.seed(seed_offset + min(indices))
         folds = vfold_cv(
           boot_data,
           v = k,

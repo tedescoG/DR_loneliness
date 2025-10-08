@@ -7,7 +7,7 @@ library(tidyverse)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # Data Import
-df = read_dta("~/Desktop/Research/Thesis/dati/pooled_ita_w.dta") %>%
+df = read_dta("data/pooled_ita_w.dta") %>%
   select(-c(1:6)) %>%
   as.data.frame()
 
@@ -213,5 +213,5 @@ data_clean = data.frame(
 # Save data in .rds
 saveRDS(
   data_clean,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_clean.rds"
+  "data/data_clean.rds"
 )

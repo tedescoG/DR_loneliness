@@ -24,7 +24,7 @@ gbm.grid = list(
 )
 
 # Import data
-d = readRDS("~/Desktop/Research/Thesis/DR_loneliness/data/data_clean.rds")
+d = readRDS("data/data_clean.rds")
 # Define ps function
 ps_formula = as.formula(
   remote_contact ~
@@ -74,7 +74,7 @@ system.time({
 # Save hyperparams combination
 saveRDS(
   tuned_gbm$params,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec_params.rds"
+  "results/weighting/inc_dec_params.rds"
 )
 
 set.seed(run)
@@ -87,14 +87,14 @@ ps_inc_dec = do.call(
 (weight_summary_inc_dec = summary(ps_inc_dec))
 saveRDS(
   weight_summary_inc_dec,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/weighting_summary.rds"
+  "results/weighting/inc_dec/weighting_summary.rds"
 )
 
 # Global graphical assessment
 # Save plots with high resolution for academic publication
 # Convergence plot
 png(
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/convergence_plot.png",
+  "results/weighting/inc_dec/convergence_plot.png",
   width = 8,
   height = 6,
   units = "in",
@@ -105,7 +105,7 @@ dev.off()
 
 # Overlap plot
 png(
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/overlap_plot.png",
+  "results/weighting/inc_dec/overlap_plot.png",
   width = 8,
   height = 6,
   units = "in",
@@ -116,7 +116,7 @@ dev.off()
 
 # Balance plot
 png(
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/balance_plot.png",
+  "results/weighting/inc_dec/balance_plot.png",
   width = 8,
   height = 6,
   units = "in",
@@ -127,7 +127,7 @@ dev.off()
 
 # Weights plot
 png(
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/weights_plot.png",
+  "results/weighting/inc_dec/weights_plot.png",
   width = 8,
   height = 6,
   units = "in",
@@ -147,7 +147,7 @@ plot(ps_inc_dec, plots = 6) #weights
 (bal_tab = bal.table(ps_inc_dec))
 saveRDS(
   bal_tab,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_dec/balance_table.rds"
+  "results/weighting/inc_dec/balance_table.rds"
 )
 
 # Saving weights in df
@@ -181,7 +181,7 @@ system.time({
 # Save hyperparams combination
 saveRDS(
   tuned_gbm$params,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix_params.rds"
+  "results/weighting/inc_mix_params.rds"
 )
 
 set.seed(run)
@@ -194,14 +194,14 @@ ps_inc_mix = do.call(
 (weight_summary_inc_mix = summary(ps_inc_mix))
 saveRDS(
   weight_summary_inc_mix,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/weighting_summury.rds"
+  "results/weighting/inc_mix/weighting_summury.rds"
 )
 
 # Global graphical assessment
 # Save plots with high resolution for academic publication
 # Convergence plot
 png(
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/convergence_plot.png",
+  "results/weighting/inc_mix/convergence_plot.png",
   width = 8,
   height = 6,
   units = "in",
@@ -212,7 +212,7 @@ dev.off()
 
 # Overlap plot
 png(
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/overlap_plot.png",
+  "results/weighting/inc_mix/overlap_plot.png",
   width = 8,
   height = 6,
   units = "in",
@@ -223,7 +223,7 @@ dev.off()
 
 # Balance plot
 png(
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/balance_plot.png",
+  "results/weighting/inc_mix/balance_plot.png",
   width = 8,
   height = 6,
   units = "in",
@@ -234,7 +234,7 @@ dev.off()
 
 # Weights plot
 png(
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/weights_plot.png",
+  "results/weighting/inc_mix/weights_plot.png",
   width = 8,
   height = 6,
   units = "in",
@@ -252,7 +252,7 @@ plot(ps_inc_mix, plots = 6) #weights
 (bal_tab = bal.table(ps_inc_mix))
 saveRDS(
   bal_tab,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/results/weighting/inc_mix/balance_table.rds"
+  "results/weighting/inc_mix/balance_table.rds"
 )
 
 # Saving weights in df
@@ -268,5 +268,5 @@ d$iptw = ifelse(
 
 saveRDS(
   d,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_iptw.rds"
+  "data/data_iptw.rds"
 )

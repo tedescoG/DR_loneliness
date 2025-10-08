@@ -11,10 +11,10 @@
 # Setup
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 run = 123
-source("utils2.R")
+source("utils.R")
 
 # Load data
-d = readRDS("data/data_iptw2.rds")
+d = readRDS("data/data_iptw.rds")
 
 # Define propensity score formula (same for both comparisons)
 ps_formula = as.formula(
@@ -49,7 +49,7 @@ outcome_formula_4 = "baseline_lone + baseline_depr + female + age_cat + edu +
                      ppl_infected + income_loss + neighborhood" # Full adjustment
 
 # Bootstrap parameters
-n_boot = 2000
+n_boot = 5000
 n_cores = NULL # Auto-detect
 k_folds = 5 # Number of folds for cross-fitting
 
