@@ -63,6 +63,7 @@ gbm_params = readRDS("results/weighting/inc_dec_params.rds")
 # Bootstrap parameters
 n_boot = 1000
 n_cores = NULL # Auto-detect
+k_folds = 5 # Number of folds for cross-fitting
 
 # Store results
 results = list()
@@ -198,7 +199,7 @@ results$model1_cf2 = DR_att(
   gbm_params = gbm_params,
   bootstrap_method = "reweight",
   cross_fitting = TRUE,
-  k = 5,
+  k = k_folds,
   stratify_folds = TRUE,
   stratified = TRUE,
   n_boot = n_boot,
@@ -227,7 +228,7 @@ results$model2_cf2 = DR_att(
   gbm_params = gbm_params,
   bootstrap_method = "reweight",
   cross_fitting = TRUE,
-  k = 5,
+  k = k_folds,
   stratify_folds = TRUE,
   stratified = TRUE,
   n_boot = n_boot,
@@ -256,7 +257,7 @@ results$model3_cf2 = DR_att(
   gbm_params = gbm_params,
   bootstrap_method = "reweight",
   cross_fitting = TRUE,
-  k = 5,
+  k = k_folds,
   stratify_folds = TRUE,
   stratified = TRUE,
   n_boot = n_boot,
@@ -285,7 +286,7 @@ results$model4_cf2 = DR_att(
   gbm_params = gbm_params,
   bootstrap_method = "reweight",
   cross_fitting = TRUE,
-  k = 5,
+  k = k_folds,
   stratify_folds = TRUE,
   stratified = TRUE,
   n_boot = n_boot,
@@ -352,7 +353,7 @@ legend(
 # AIPW - Cross-Fitted Method
 plot(
   density(results$model1_cf2$aipw$bootstrap_samples),
-  main = "AIPW: Cross-Fitted (k=2)",
+  main = paste0("AIPW: Cross-Fitted (k=", k_folds, ")"),
   xlab = "ATT",
   col = "blue",
   lwd = 2,
@@ -422,7 +423,7 @@ legend(
 # DRS - Cross-Fitted Method
 plot(
   density(results$model1_cf2$drs$bootstrap_samples),
-  main = "DRS: Cross-Fitted (k=2)",
+  main = paste0("DRS: Cross-Fitted (k=", k_folds, ")"),
   xlab = "ATT",
   col = "blue",
   lwd = 2,
@@ -475,10 +476,10 @@ summary_rows[[2]] = extract_results(
 summary_rows[[3]] = extract_results(
   results$model1_cf2,
   1,
-  "CrossFit_k2",
+  paste0("CrossFit_k", k_folds),
   "AIPW"
 )
-summary_rows[[4]] = extract_results(results$model1_cf2, 1, "CrossFit_k2", "DRS")
+summary_rows[[4]] = extract_results(results$model1_cf2, 1, paste0("CrossFit_k", k_folds), "DRS")
 
 # Model 2
 summary_rows[[5]] = extract_results(
@@ -496,10 +497,10 @@ summary_rows[[6]] = extract_results(
 summary_rows[[7]] = extract_results(
   results$model2_cf2,
   2,
-  "CrossFit_k2",
+  paste0("CrossFit_k", k_folds),
   "AIPW"
 )
-summary_rows[[8]] = extract_results(results$model2_cf2, 2, "CrossFit_k2", "DRS")
+summary_rows[[8]] = extract_results(results$model2_cf2, 2, paste0("CrossFit_k", k_folds), "DRS")
 
 # Model 3
 summary_rows[[9]] = extract_results(
@@ -517,13 +518,13 @@ summary_rows[[10]] = extract_results(
 summary_rows[[11]] = extract_results(
   results$model3_cf2,
   3,
-  "CrossFit_k2",
+  paste0("CrossFit_k", k_folds),
   "AIPW"
 )
 summary_rows[[12]] = extract_results(
   results$model3_cf2,
   3,
-  "CrossFit_k2",
+  paste0("CrossFit_k", k_folds),
   "DRS"
 )
 
@@ -543,46 +544,29 @@ summary_rows[[14]] = extract_results(
 summary_rows[[15]] = extract_results(
   results$model4_cf2,
   4,
-  "CrossFit_k2",
+  paste0("CrossFit_k", k_folds),
   "AIPW"
 )
 summary_rows[[16]] = extract_results(
   results$model4_cf2,
   4,
-  "CrossFit_k2",
+  paste0("CrossFit_k", k_folds),
   "DRS"
 )
 
 summary_table = do.call(rbind, summary_rows)
 rownames(summary_table) = NULL
 
-# Add balance diagnostics
-extract_balance = function(result, model_num, method) {
-  if (!is.null(result$balance_diagnostics)) {
-    data.frame(
-      Model = model_num,
-      Method = method,
-      Avg_ASD_Mean = result$balance_diagnostics$avg_asd$mean,
-      Avg_ASD_SD = result$balance_diagnostics$avg_asd$sd,
-      Max_ASD_Mean = result$balance_diagnostics$max_asd$mean,
-      Max_ASD_SD = result$balance_diagnostics$max_asd$sd,
-      ESS_Mean = result$balance_diagnostics$ess$mean,
-      ESS_SD = result$balance_diagnostics$ess$sd
-    )
-  } else {
-    NULL
-  }
-}
 
 balance_rows = list(
   extract_balance(results$model1_reweight, 1, "Reweight"),
-  extract_balance(results$model1_cf2, 1, "CrossFit_k2"),
+  extract_balance(results$model1_cf2, 1, paste0("CrossFit_k", k_folds)),
   extract_balance(results$model2_reweight, 2, "Reweight"),
-  extract_balance(results$model2_cf2, 2, "CrossFit_k2"),
+  extract_balance(results$model2_cf2, 2, paste0("CrossFit_k", k_folds)),
   extract_balance(results$model3_reweight, 3, "Reweight"),
-  extract_balance(results$model3_cf2, 3, "CrossFit_k2"),
+  extract_balance(results$model3_cf2, 3, paste0("CrossFit_k", k_folds)),
   extract_balance(results$model4_reweight, 4, "Reweight"),
-  extract_balance(results$model4_cf2, 4, "CrossFit_k2")
+  extract_balance(results$model4_cf2, 4, paste0("CrossFit_k", k_folds))
 )
 
 balance_table = do.call(rbind, balance_rows)

@@ -1900,3 +1900,21 @@ extract_results = function(result, model_num, method, estimator) {
     n_failed = result$n_failed
   )
 }
+
+# Add balance diagnostics
+extract_balance = function(result, model_num, method) {
+  if (!is.null(result$balance_diagnostics)) {
+    data.frame(
+      Model = model_num,
+      Method = method,
+      Avg_ASD_Mean = result$balance_diagnostics$avg_asd$mean,
+      Avg_ASD_SD = result$balance_diagnostics$avg_asd$sd,
+      Max_ASD_Mean = result$balance_diagnostics$max_asd$mean,
+      Max_ASD_SD = result$balance_diagnostics$max_asd$sd,
+      ESS_Mean = result$balance_diagnostics$ess$mean,
+      ESS_SD = result$balance_diagnostics$ess$sd
+    )
+  } else {
+    NULL
+  }
+}
