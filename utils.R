@@ -1927,7 +1927,6 @@ plot_model_comparison <- function(
   width = 3000,
   height = 2000,
   res = 300,
-  method = "reweight",
   colors = c("blue", "red", "green", "purple"),
   ylim_padding = 1.05,
   aipw_title = "AIPW: Reweight Method",
@@ -1944,7 +1943,6 @@ plot_model_comparison <- function(
   #' @param width Plot width in pixels (default: 3000)
   #' @param height Plot height in pixels (default: 2000)
   #' @param res Resolution in DPI (default: 300)
-  #' @param method Method name to extract from results (default: "reweight")
   #' @param colors Vector of colors for each model (default: blue, red, green, purple)
   #' @param ylim_padding Padding factor for y-axis limit (default: 1.05 for 5% padding)
   #' @param aipw_title Title for AIPW panel (default: "AIPW: Reweight Method")
@@ -1965,7 +1963,7 @@ plot_model_comparison <- function(
 
   # Extract all AIPW bootstrap samples
   aipw_samples <- lapply(results, function(x) {
-    x[[method]]$aipw$bootstrap_samples
+    x$aipw$bootstrap_samples
   })
 
   # Calculate densities
@@ -1981,7 +1979,7 @@ plot_model_comparison <- function(
 
   # Extract all DRS bootstrap samples
   drs_samples <- lapply(results, function(x) {
-    x[[method]]$drs$bootstrap_samples
+    x$drs$bootstrap_samples
   })
 
   # Calculate densities

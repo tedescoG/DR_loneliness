@@ -61,7 +61,7 @@ outcome_formula_4 = "baseline_lone + baseline_depr + female + age_cat + edu +
 gbm_params = readRDS("results/weighting/inc_dec_params.rds")
 
 # Bootstrap parameters
-n_boot = 5000
+n_boot = 10
 n_cores = NULL # Auto-detect
 
 # Store results
@@ -192,8 +192,7 @@ plot_model_comparison(
     model3_reweight = results$model3_reweight,
     model4_reweight = results$model4_reweight
   ),
-  save_path = "results/outcome/inc_dec/figures/model_comparison_distributions.png",
-  method = "reweight"
+  save_path = "results/outcome/inc_dec/figures/model_comparison_distributions.png"
 )
 
 

@@ -191,8 +191,7 @@ plot_model_comparison(
     model3_reweight = results$model3_reweight,
     model4_reweight = results$model4_reweight
   ),
-  save_path = "results/outcome/inc_mix/figures/model_comparison_distributions.png",
-  method = "reweight"
+  save_path = "results/outcome/inc_mix/figures/model_comparison_distributions.png"
 )
 
 # =============================================================================

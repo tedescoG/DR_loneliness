@@ -203,7 +203,6 @@ plot_model_comparison(
     model4_cf = results_inc_dec$model4_cf
   ),
   save_path = "results/outcome/crossfitting/inc_dec/figures/model_comparison_distributions.png",
-  method = "cf",
   aipw_title = paste0("AIPW: Cross-Fitted (k=", k_folds, ")"),
   drs_title = paste0("DRS: Cross-Fitted (k=", k_folds, ")")
 )
@@ -478,7 +477,6 @@ plot_model_comparison(
     model4_cf = results_inc_mix$model4_cf
   ),
   save_path = "results/outcome/crossfitting/inc_mix/figures/model_comparison_distributions.png",
-  method = "cf",
   aipw_title = paste0("AIPW: Cross-Fitted (k=", k_folds, ")"),
   drs_title = paste0("DRS: Cross-Fitted (k=", k_folds, ")")
 )
