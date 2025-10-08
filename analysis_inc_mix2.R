@@ -4,7 +4,7 @@
 #
 # This script compares:
 # - 4 outcome model specifications (Model 1-4)
-# - 2 estimation approaches (reweight vs cross-fitted k=2)
+# - Reweight estimation approach only
 # - Balanced bootstrap sampling
 # - All available confidence intervals (norm, basic, perc)
 
@@ -63,7 +63,6 @@ gbm_params = readRDS("results/weighting/inc_mix_params.rds")
 # Bootstrap parameters
 n_boot = 2000
 n_cores = NULL # Auto-detect
-k_folds = 5 # Number of folds for cross-fitting
 
 # Store results
 results = list()
@@ -181,137 +180,17 @@ results$model4_reweight = DR_att(
 )
 
 # =============================================================================
-# CROSS-FITTED METHOD (k=2)
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Model 1
-# -----------------------------------------------------------------------------
-
-results$model1_cf2 = DR_att(
-  outcome = "severe_loneliness",
-  treatment = "remote_contact",
-  treated_level = "increase",
-  control_level = "mix",
-  f.ps = ps_formula,
-  f.out = outcome_formula_1,
-  data = d,
-  gbm_params = gbm_params,
-  bootstrap_method = "reweight",
-  cross_fitting = TRUE,
-  k = k_folds,
-  stratify_folds = TRUE,
-  stratified = TRUE,
-  n_boot = n_boot,
-  seed = run,
-  verbose = TRUE,
-  parallel = TRUE,
-  n_cores = n_cores,
-  plot_diagnostics = TRUE,
-  ci_type = "all",
-  sim = "balanced",
-  save_to = "results/outcome/inc_mix/figures"
-)
-
-# -----------------------------------------------------------------------------
-# Model 2
-# -----------------------------------------------------------------------------
-
-results$model2_cf2 = DR_att(
-  outcome = "severe_loneliness",
-  treatment = "remote_contact",
-  treated_level = "increase",
-  control_level = "mix",
-  f.ps = ps_formula,
-  f.out = outcome_formula_2,
-  data = d,
-  gbm_params = gbm_params,
-  bootstrap_method = "reweight",
-  cross_fitting = TRUE,
-  k = k_folds,
-  stratify_folds = TRUE,
-  stratified = TRUE,
-  n_boot = n_boot,
-  seed = run,
-  verbose = TRUE,
-  parallel = TRUE,
-  n_cores = n_cores,
-  plot_diagnostics = TRUE,
-  ci_type = "all",
-  sim = "balanced",
-  save_to = "results/outcome/inc_mix/figures"
-)
-
-# -----------------------------------------------------------------------------
-# Model 3
-# -----------------------------------------------------------------------------
-
-results$model3_cf2 = DR_att(
-  outcome = "severe_loneliness",
-  treatment = "remote_contact",
-  treated_level = "increase",
-  control_level = "mix",
-  f.ps = ps_formula,
-  f.out = outcome_formula_3,
-  data = d,
-  gbm_params = gbm_params,
-  bootstrap_method = "reweight",
-  cross_fitting = TRUE,
-  k = k_folds,
-  stratify_folds = TRUE,
-  stratified = TRUE,
-  n_boot = n_boot,
-  seed = run,
-  verbose = TRUE,
-  parallel = TRUE,
-  n_cores = n_cores,
-  plot_diagnostics = TRUE,
-  ci_type = "all",
-  sim = "balanced",
-  save_to = "results/outcome/inc_mix/figures"
-)
-
-# -----------------------------------------------------------------------------
-# Model 4
-# -----------------------------------------------------------------------------
-
-results$model4_cf2 = DR_att(
-  outcome = "severe_loneliness",
-  treatment = "remote_contact",
-  treated_level = "increase",
-  control_level = "mix",
-  f.ps = ps_formula,
-  f.out = outcome_formula_4,
-  data = d,
-  gbm_params = gbm_params,
-  bootstrap_method = "reweight",
-  cross_fitting = TRUE,
-  k = k_folds,
-  stratify_folds = TRUE,
-  stratified = TRUE,
-  n_boot = n_boot,
-  seed = run,
-  verbose = TRUE,
-  parallel = TRUE,
-  n_cores = n_cores,
-  plot_diagnostics = TRUE,
-  ci_type = "all",
-  sim = "balanced",
-  save_to = "results/outcome/inc_mix/figures"
-)
-
-# =============================================================================
 # COMPARISON PLOTS
 # =============================================================================
 
 # Create high-resolution comparison plot
 png(
   "results/outcome/inc_mix/figures/model_comparison_distributions.png",
-  width = 4000,
-  height = 3000,
+  width = 3000,
+  height = 2000,
   res = 300
 )
-par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
 
 # AIPW - Reweight Method
 plot(
@@ -339,39 +218,6 @@ lines(
 )
 lines(
   density(results$model4_reweight$aipw$bootstrap_samples),
-  col = "purple",
-  lwd = 2
-)
-legend(
-  "topleft",
-  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
-  col = c("blue", "red", "green", "purple"),
-  lwd = 2,
-  cex = 0.8
-)
-
-# AIPW - Cross-Fitted Method
-plot(
-  density(results$model1_cf2$aipw$bootstrap_samples),
-  main = paste0("AIPW: Cross-Fitted (k=", k_folds, ")"),
-  xlab = "ATT",
-  col = "blue",
-  lwd = 2,
-  xlim = range(c(
-    results$model1_cf2$aipw$bootstrap_samples,
-    results$model2_cf2$aipw$bootstrap_samples,
-    results$model3_cf2$aipw$bootstrap_samples,
-    results$model4_cf2$aipw$bootstrap_samples
-  ))
-)
-lines(density(results$model2_cf2$aipw$bootstrap_samples), col = "red", lwd = 2)
-lines(
-  density(results$model3_cf2$aipw$bootstrap_samples),
-  col = "green",
-  lwd = 2
-)
-lines(
-  density(results$model4_cf2$aipw$bootstrap_samples),
   col = "purple",
   lwd = 2
 )
@@ -420,35 +266,6 @@ legend(
   cex = 0.8
 )
 
-# DRS - Cross-Fitted Method
-plot(
-  density(results$model1_cf2$drs$bootstrap_samples),
-  main = paste0("DRS: Cross-Fitted (k=", k_folds, ")"),
-  xlab = "ATT",
-  col = "blue",
-  lwd = 2,
-  xlim = range(c(
-    results$model1_cf2$drs$bootstrap_samples,
-    results$model2_cf2$drs$bootstrap_samples,
-    results$model3_cf2$drs$bootstrap_samples,
-    results$model4_cf2$drs$bootstrap_samples
-  ))
-)
-lines(density(results$model2_cf2$drs$bootstrap_samples), col = "red", lwd = 2)
-lines(density(results$model3_cf2$drs$bootstrap_samples), col = "green", lwd = 2)
-lines(
-  density(results$model4_cf2$drs$bootstrap_samples),
-  col = "purple",
-  lwd = 2
-)
-legend(
-  "topleft",
-  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
-  col = c("blue", "red", "green", "purple"),
-  lwd = 2,
-  cex = 0.8
-)
-
 par(mfrow = c(1, 1))
 dev.off()
 
@@ -476,84 +293,46 @@ summary_rows[[2]] = extract_results(
   "Reweight",
   "DRS"
 )
-summary_rows[[3]] = extract_results(
-  results$model1_cf2,
-  1,
-  paste0("CrossFit_k", k_folds),
-  "AIPW"
-)
-summary_rows[[4]] = extract_results(results$model1_cf2, 1, paste0("CrossFit_k", k_folds), "DRS")
 
 # Model 2
-summary_rows[[5]] = extract_results(
+summary_rows[[3]] = extract_results(
   results$model2_reweight,
   2,
+  "Reweight",
+  "AIPW"
+)
+summary_rows[[4]] = extract_results(
+  results$model2_reweight,
+  2,
+  "Reweight",
+  "DRS"
+)
+
+# Model 3
+summary_rows[[5]] = extract_results(
+  results$model3_reweight,
+  3,
   "Reweight",
   "AIPW"
 )
 summary_rows[[6]] = extract_results(
-  results$model2_reweight,
-  2,
-  "Reweight",
-  "DRS"
-)
-summary_rows[[7]] = extract_results(
-  results$model2_cf2,
-  2,
-  paste0("CrossFit_k", k_folds),
-  "AIPW"
-)
-summary_rows[[8]] = extract_results(results$model2_cf2, 2, paste0("CrossFit_k", k_folds), "DRS")
-
-# Model 3
-summary_rows[[9]] = extract_results(
   results$model3_reweight,
   3,
   "Reweight",
-  "AIPW"
-)
-summary_rows[[10]] = extract_results(
-  results$model3_reweight,
-  3,
-  "Reweight",
-  "DRS"
-)
-summary_rows[[11]] = extract_results(
-  results$model3_cf2,
-  3,
-  paste0("CrossFit_k", k_folds),
-  "AIPW"
-)
-summary_rows[[12]] = extract_results(
-  results$model3_cf2,
-  3,
-  paste0("CrossFit_k", k_folds),
   "DRS"
 )
 
 # Model 4
-summary_rows[[13]] = extract_results(
+summary_rows[[7]] = extract_results(
   results$model4_reweight,
   4,
   "Reweight",
   "AIPW"
 )
-summary_rows[[14]] = extract_results(
+summary_rows[[8]] = extract_results(
   results$model4_reweight,
   4,
   "Reweight",
-  "DRS"
-)
-summary_rows[[15]] = extract_results(
-  results$model4_cf2,
-  4,
-  paste0("CrossFit_k", k_folds),
-  "AIPW"
-)
-summary_rows[[16]] = extract_results(
-  results$model4_cf2,
-  4,
-  paste0("CrossFit_k", k_folds),
   "DRS"
 )
 
@@ -563,13 +342,9 @@ rownames(summary_table) = NULL
 
 balance_rows = list(
   extract_balance(results$model1_reweight, 1, "Reweight"),
-  extract_balance(results$model1_cf2, 1, paste0("CrossFit_k", k_folds)),
   extract_balance(results$model2_reweight, 2, "Reweight"),
-  extract_balance(results$model2_cf2, 2, paste0("CrossFit_k", k_folds)),
   extract_balance(results$model3_reweight, 3, "Reweight"),
-  extract_balance(results$model3_cf2, 3, paste0("CrossFit_k", k_folds)),
-  extract_balance(results$model4_reweight, 4, "Reweight"),
-  extract_balance(results$model4_cf2, 4, paste0("CrossFit_k", k_folds))
+  extract_balance(results$model4_reweight, 4, "Reweight")
 )
 
 balance_table = do.call(rbind, balance_rows)
@@ -610,7 +385,5 @@ saveRDS(results$model1_reweight, "results/outcome/inc_mix/model1_reweight.rds")
 saveRDS(results$model2_reweight, "results/outcome/inc_mix/model2_reweight.rds")
 saveRDS(results$model3_reweight, "results/outcome/inc_mix/model3_reweight.rds")
 saveRDS(results$model4_reweight, "results/outcome/inc_mix/model4_reweight.rds")
-saveRDS(results$model1_cf2, "results/outcome/inc_mix/model1_cf2.rds")
-saveRDS(results$model2_cf2, "results/outcome/inc_mix/model2_cf2.rds")
-saveRDS(results$model3_cf2, "results/outcome/inc_mix/model3_cf2.rds")
-saveRDS(results$model4_cf2, "results/outcome/inc_mix/model4_cf2.rds")
+
+cat("Analysis complete. Results saved to: results/outcome/inc_mix/\n")
