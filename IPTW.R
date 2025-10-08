@@ -24,7 +24,7 @@ gbm.grid = list(
 )
 
 # Import data
-d = readRDS("~/Desktop/Research/Thesis/DR_loneliness/data/data_clean2.rds")
+d = readRDS("~/Desktop/Research/Thesis/DR_loneliness/data/data_clean.rds")
 # Define ps function
 ps_formula = as.formula(
   remote_contact ~
@@ -35,14 +35,11 @@ ps_formula = as.formula(
       income +
       marital +
       coliving +
-      #change_res +
-      #kinless +
       health_pre +
       chronic +
       death_due_covid +
       ppl_infected +
       income_loss +
-      #job_loss +
       neighborhood +
       baseline_depr +
       baseline_lone
@@ -271,5 +268,5 @@ d$iptw = ifelse(
 
 saveRDS(
   d,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_iptw2.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_iptw.rds"
 )

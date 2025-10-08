@@ -11,10 +11,10 @@
 # Setup
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 run = 123
-source("utils2.R")
+source("utils.R")
 
 # Load data
-d = readRDS("data/data_iptw2.rds")
+d = readRDS("data/data_iptw.rds")
 
 # Create output directories
 comparison = "inc_dec"

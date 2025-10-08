@@ -84,14 +84,6 @@ table(marital)
 coliving = ifelse((df$A2_10 == 1) & (df$A3_1 == 1), 0, 1)
 table(coliving)
 
-# Change in residence
-change_res = ifelse(df$F4 != df$F3, 1, 0)
-
-# Kin available
-table(df$A1_10, useNA = "ifany")
-kinless = ifelse(df$A1_10 == 1, 1, 0)
-table(kinless)
-
 # Self-reported health condition pre-covid
 table(df$F10, useNA = "ifany")
 # aggregation of `bad` and `very bad`
@@ -119,11 +111,6 @@ ppl_infected = ifelse(replace_na(df$E1_8, 0) == 1, 1, 0)
 # Income loss during COVID
 table(df$E1_4, useNA = "ifany")
 income_loss = ifelse(replace_na(df$E1_4, 0) == 1, 1, 0)
-
-# Job loss during COVID
-table(df$E1_5, useNA = "ifany")
-job_loss = ifelse(replace_na(df$E1_5, 0) == 1, 1, 0)
-table(job_loss, useNA = "ifany")
 
 
 # Self-reported depression pre-COVID (Baseline)
@@ -206,14 +193,11 @@ data_clean = data.frame(
   income,
   marital,
   coliving,
-  #change_res,
-  #kinless,
   health_pre,
   chronic,
   death_due_covid,
   ppl_infected,
   income_loss,
-  #job_loss,
   neighborhood,
   baseline_depr,
   baseline_lone,
@@ -229,5 +213,5 @@ data_clean = data.frame(
 # Save data in .rds
 saveRDS(
   data_clean,
-  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_clean2.rds"
+  "/Users/gaetanotedesco/Desktop/Research/Thesis/DR_loneliness/data/data_clean.rds"
 )
