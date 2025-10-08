@@ -1224,9 +1224,10 @@ boot_iter = function(
                 max_asd = max(std_diffs)
               }
 
-              # Compute effective sample size
+              # Compute effective sample size for control group
               # ESS = (sum of weights)^2 / sum of weights^2
-              ess = sum(weights_vec)^2 / sum(weights_vec^2)
+              control_weights = weights_vec[treat_vec == 0]
+              ess = sum(control_weights)^2 / sum(control_weights^2)
             }
           }
         },
