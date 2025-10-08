@@ -479,7 +479,12 @@ summary_rows[[3]] = extract_results(
   paste0("CrossFit_k", k_folds),
   "AIPW"
 )
-summary_rows[[4]] = extract_results(results$model1_cf2, 1, paste0("CrossFit_k", k_folds), "DRS")
+summary_rows[[4]] = extract_results(
+  results$model1_cf2,
+  1,
+  paste0("CrossFit_k", k_folds),
+  "DRS"
+)
 
 # Model 2
 summary_rows[[5]] = extract_results(
@@ -500,7 +505,12 @@ summary_rows[[7]] = extract_results(
   paste0("CrossFit_k", k_folds),
   "AIPW"
 )
-summary_rows[[8]] = extract_results(results$model2_cf2, 2, paste0("CrossFit_k", k_folds), "DRS")
+summary_rows[[8]] = extract_results(
+  results$model2_cf2,
+  2,
+  paste0("CrossFit_k", k_folds),
+  "DRS"
+)
 
 # Model 3
 summary_rows[[9]] = extract_results(
