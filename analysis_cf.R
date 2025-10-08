@@ -57,14 +57,6 @@ k_folds = 5 # Number of folds for cross-fitting
 # COMPARISON 1: INCREASE VS DECREASE
 # =============================================================================
 
-cat(
-  "\n=============================================================================\n"
-)
-cat("STARTING ANALYSIS: INCREASE VS DECREASE (CROSS-FITTED)\n")
-cat(
-  "=============================================================================\n\n"
-)
-
 # Create output directories
 dir.create(
   "results/outcome/crossfitting/inc_dec",
@@ -293,10 +285,10 @@ balance_table_inc_dec = do.call(rbind, balance_rows_inc_dec)
 rownames(balance_table_inc_dec) = NULL
 
 # Print summaries
-cat("\n=== INC_DEC SUMMARY TABLE ===\n")
+
 print(summary_table_inc_dec, digits = 4)
 
-cat("\n=== INC_DEC BALANCE TABLE ===\n")
+
 print(balance_table_inc_dec, digits = 4)
 
 # Save results
@@ -335,21 +327,10 @@ saveRDS(
   "results/outcome/crossfitting/inc_dec/model4_cf.rds"
 )
 
-cat(
-  "\nINC_DEC analysis complete. Results saved to: results/outcome/crossfitting/inc_dec/\n\n"
-)
 
 # =============================================================================
 # COMPARISON 2: INCREASE VS MIX
 # =============================================================================
-
-cat(
-  "\n=============================================================================\n"
-)
-cat("STARTING ANALYSIS: INCREASE VS MIX (CROSS-FITTED)\n")
-cat(
-  "=============================================================================\n\n"
-)
 
 # Create output directories
 dir.create(
@@ -620,22 +601,3 @@ saveRDS(
   results_inc_mix$model4_cf,
   "results/outcome/crossfitting/inc_mix/model4_cf.rds"
 )
-
-cat(
-  "\nINC_MIX analysis complete. Results saved to: results/outcome/crossfitting/inc_mix/\n\n"
-)
-
-# =============================================================================
-# ALL ANALYSES COMPLETE
-# =============================================================================
-
-cat(
-  "\n=============================================================================\n"
-)
-cat("ALL CROSS-FITTED ANALYSES COMPLETE\n")
-cat(
-  "=============================================================================\n"
-)
-cat("\nResults saved to:\n")
-cat("  - results/outcome/crossfitting/inc_dec/\n")
-cat("  - results/outcome/crossfitting/inc_mix/\n\n")
