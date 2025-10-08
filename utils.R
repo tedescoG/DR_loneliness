@@ -2058,3 +2058,87 @@ plot_model_comparison <- function(
 
   invisible(NULL)
 }
+
+plot_bootstrap_histograms <- function(
+  results,
+  save_path,
+  comparison_label = "Inc vs Dec",
+  width = 3000,
+  height = 2000,
+  res = 300,
+  ncol_breaks = 30
+) {
+  #' Plot Bootstrap Distribution Histograms for All Models
+  #'
+  #' Creates a 2x4 grid of histograms showing bootstrap distributions for
+  #' CF-DRS (top row) and CF-AIPW (bottom row) across 4 models.
+  #' Each histogram shows the distribution with a vertical red dashed line at the point estimate.
+  #'
+  #' @param results A list of model results (model1_reweight, model2_reweight, etc.),
+  #'   each containing `aipw` and `drs` components with `bootstrap_samples` and `estimate`
+  #' @param save_path Path where the plot should be saved (PNG format)
+  #' @param comparison_label Label for the comparison (e.g., "Inc vs Dec", "Inc vs Mix")
+  #' @param width Plot width in pixels (default: 3000)
+  #' @param height Plot height in pixels (default: 2000)
+  #' @param res Resolution in DPI (default: 300)
+  #' @param ncol_breaks Number of breaks for histograms (default: 30)
+  #'
+  #' @return NULL (displays plot and saves to file)
+
+  # Extract model names and ensure we have 4 models
+  model_names <- names(results)
+  if (length(model_names) != 4) {
+    stop("This function requires exactly 4 models")
+  }
+
+  # Create plot function (used for both display and save)
+  create_plot <- function() {
+    par(mfrow = c(2, 4), mar = c(4, 4, 3, 1))
+
+    # Top row: CF-DRS
+    for (i in 1:4) {
+      drs_samples <- results[[i]]$drs$bootstrap_samples
+      drs_estimate <- results[[i]]$drs$estimate
+
+      hist(
+        drs_samples,
+        breaks = ncol_breaks,
+        col = "lightgreen",
+        border = "black",
+        main = paste0("CF-DRS Model ", i, " - ", comparison_label),
+        xlab = "ATT",
+        ylab = "Frequency"
+      )
+      abline(v = drs_estimate, col = "red", lwd = 2, lty = 2)
+    }
+
+    # Bottom row: CF-AIPW
+    for (i in 1:4) {
+      aipw_samples <- results[[i]]$aipw$bootstrap_samples
+      aipw_estimate <- results[[i]]$aipw$estimate
+
+      hist(
+        aipw_samples,
+        breaks = ncol_breaks,
+        col = "lightblue",
+        border = "black",
+        main = paste0("CF-AIPW Model ", i, " - ", comparison_label),
+        xlab = "ATT",
+        ylab = "Frequency"
+      )
+      abline(v = aipw_estimate, col = "red", lwd = 2, lty = 2)
+    }
+
+    par(mfrow = c(1, 1))
+  }
+
+  # Display plot
+  create_plot()
+
+  # Save to file
+  png(save_path, width = width, height = height, res = res)
+  create_plot()
+  dev.off()
+
+  invisible(NULL)
+}

@@ -61,7 +61,7 @@ outcome_formula_4 = "baseline_lone + baseline_depr + female + age_cat + edu +
 gbm_params = readRDS("results/weighting/inc_dec_params.rds")
 
 # Bootstrap parameters
-n_boot = 10
+n_boot = 5000
 n_cores = NULL # Auto-detect
 
 # Store results
@@ -193,6 +193,18 @@ plot_model_comparison(
     model4_reweight = results$model4_reweight
   ),
   save_path = "results/outcome/inc_dec/figures/model_comparison_distributions.png"
+)
+
+# Create bootstrap histograms
+plot_bootstrap_histograms(
+  results = list(
+    model1_reweight = results$model1_reweight,
+    model2_reweight = results$model2_reweight,
+    model3_reweight = results$model3_reweight,
+    model4_reweight = results$model4_reweight
+  ),
+  save_path = "results/outcome/inc_dec/figures/bootstrap_histograms.png",
+  comparison_label = "Inc vs Dec"
 )
 
 

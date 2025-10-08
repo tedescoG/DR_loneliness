@@ -194,6 +194,18 @@ plot_model_comparison(
   save_path = "results/outcome/inc_mix/figures/model_comparison_distributions.png"
 )
 
+# Create bootstrap histograms
+plot_bootstrap_histograms(
+  results = list(
+    model1_reweight = results$model1_reweight,
+    model2_reweight = results$model2_reweight,
+    model3_reweight = results$model3_reweight,
+    model4_reweight = results$model4_reweight
+  ),
+  save_path = "results/outcome/inc_mix/figures/bootstrap_histograms.png",
+  comparison_label = "Inc vs Mix"
+)
+
 # =============================================================================
 # CREATE COMPREHENSIVE SUMMARY TABLE
 # =============================================================================
