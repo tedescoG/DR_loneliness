@@ -184,90 +184,17 @@ results$model4_reweight = DR_att(
 # =============================================================================
 
 # Create high-resolution comparison plot
-png(
-  "results/outcome/inc_dec/figures/model_comparison_distributions.png",
-  width = 3000,
-  height = 2000,
-  res = 300
+# Create and save model comparison plot
+plot_model_comparison(
+  results = list(
+    model1_reweight = results$model1_reweight,
+    model2_reweight = results$model2_reweight,
+    model3_reweight = results$model3_reweight,
+    model4_reweight = results$model4_reweight
+  ),
+  save_path = "results/outcome/inc_dec/figures/model_comparison_distributions.png",
+  method = "reweight"
 )
-par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
-
-# AIPW - Reweight Method
-plot(
-  density(results$model1_reweight$aipw$bootstrap_samples),
-  main = "AIPW: Reweight Method",
-  xlab = "ATT",
-  col = "blue",
-  lwd = 2,
-  xlim = range(c(
-    results$model1_reweight$aipw$bootstrap_samples,
-    results$model2_reweight$aipw$bootstrap_samples,
-    results$model3_reweight$aipw$bootstrap_samples,
-    results$model4_reweight$aipw$bootstrap_samples
-  ))
-)
-lines(
-  density(results$model2_reweight$aipw$bootstrap_samples),
-  col = "red",
-  lwd = 2
-)
-lines(
-  density(results$model3_reweight$aipw$bootstrap_samples),
-  col = "green",
-  lwd = 2
-)
-lines(
-  density(results$model4_reweight$aipw$bootstrap_samples),
-  col = "purple",
-  lwd = 2
-)
-legend(
-  "topleft",
-  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
-  col = c("blue", "red", "green", "purple"),
-  lwd = 2,
-  cex = 0.8
-)
-
-# DRS - Reweight Method
-plot(
-  density(results$model1_reweight$drs$bootstrap_samples),
-  main = "DRS: Reweight Method",
-  xlab = "ATT",
-  col = "blue",
-  lwd = 2,
-  xlim = range(c(
-    results$model1_reweight$drs$bootstrap_samples,
-    results$model2_reweight$drs$bootstrap_samples,
-    results$model3_reweight$drs$bootstrap_samples,
-    results$model4_reweight$drs$bootstrap_samples
-  ))
-)
-lines(
-  density(results$model2_reweight$drs$bootstrap_samples),
-  col = "red",
-  lwd = 2
-)
-lines(
-  density(results$model3_reweight$drs$bootstrap_samples),
-  col = "green",
-  lwd = 2
-)
-lines(
-  density(results$model4_reweight$drs$bootstrap_samples),
-  col = "purple",
-  lwd = 2
-)
-legend(
-  "topleft",
-  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
-  col = c("blue", "red", "green", "purple"),
-  lwd = 2,
-  cex = 0.8
-)
-
-par(mfrow = c(1, 1))
-dev.off()
 
 
 # =============================================================================

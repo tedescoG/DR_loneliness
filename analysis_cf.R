@@ -203,93 +203,17 @@ results_inc_dec$model4_cf = DR_att(
 # COMPARISON PLOTS - INC_DEC
 # -----------------------------------------------------------------------------
 
-png(
-  "results/outcome/crossfitting/inc_dec/figures/model_comparison_distributions.png",
-  width = 3000,
-  height = 2000,
-  res = 300
-)
-par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
-
-# AIPW - Cross-Fitted Method
-plot(
-  density(results_inc_dec$model1_cf$aipw$bootstrap_samples),
-  main = paste0("AIPW: Cross-Fitted (k=", k_folds, ")"),
-  xlab = "ATT",
-  col = "blue",
-  lwd = 2,
-  xlim = range(c(
-    results_inc_dec$model1_cf$aipw$bootstrap_samples,
-    results_inc_dec$model2_cf$aipw$bootstrap_samples,
-    results_inc_dec$model3_cf$aipw$bootstrap_samples,
-    results_inc_dec$model4_cf$aipw$bootstrap_samples
-  ))
-)
-lines(
-  density(results_inc_dec$model2_cf$aipw$bootstrap_samples),
-  col = "red",
-  lwd = 2
-)
-lines(
-  density(results_inc_dec$model3_cf$aipw$bootstrap_samples),
-  col = "green",
-  lwd = 2
-)
-lines(
-  density(results_inc_dec$model4_cf$aipw$bootstrap_samples),
-  col = "purple",
-  lwd = 2
-)
-legend(
-  "topleft",
-  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
-  col = c("blue", "red", "green", "purple"),
-  lwd = 2,
-  cex = 0.8
-)
-
-# DRS - Cross-Fitted Method
-plot(
-  density(results_inc_dec$model1_cf$drs$bootstrap_samples),
-  main = paste0("DRS: Cross-Fitted (k=", k_folds, ")"),
-  xlab = "ATT",
-  col = "blue",
-  lwd = 2,
-  xlim = range(c(
-    results_inc_dec$model1_cf$drs$bootstrap_samples,
-    results_inc_dec$model2_cf$drs$bootstrap_samples,
-    results_inc_dec$model3_cf$drs$bootstrap_samples,
-    results_inc_dec$model4_cf$drs$bootstrap_samples
-  ))
-)
-lines(
-  density(results_inc_dec$model2_cf$drs$bootstrap_samples),
-  col = "red",
-  lwd = 2
-)
-lines(
-  density(results_inc_dec$model3_cf$drs$bootstrap_samples),
-  col = "green",
-  lwd = 2
-)
-lines(
-  density(results_inc_dec$model4_cf$drs$bootstrap_samples),
-  col = "purple",
-  lwd = 2
-)
-legend(
-  "topleft",
-  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
-  col = c("blue", "red", "green", "purple"),
-  lwd = 2,
-  cex = 0.8
-)
-
-par(mfrow = c(1, 1))
-dev.off()
-
-cat(
-  "Comparison plot saved to: results/outcome/crossfitting/inc_dec/figures/model_comparison_distributions.png\n"
+plot_model_comparison(
+  results = list(
+    model1_cf = results_inc_dec$model1_cf,
+    model2_cf = results_inc_dec$model2_cf,
+    model3_cf = results_inc_dec$model3_cf,
+    model4_cf = results_inc_dec$model4_cf
+  ),
+  save_path = "results/outcome/crossfitting/inc_dec/figures/model_comparison_distributions.png",
+  method = "cf",
+  aipw_title = paste0("AIPW: Cross-Fitted (k=", k_folds, ")"),
+  drs_title = paste0("DRS: Cross-Fitted (k=", k_folds, ")")
 )
 
 # -----------------------------------------------------------------------------
@@ -565,93 +489,17 @@ results_inc_mix$model4_cf = DR_att(
 # COMPARISON PLOTS - INC_MIX
 # -----------------------------------------------------------------------------
 
-png(
-  "results/outcome/crossfitting/inc_mix/figures/model_comparison_distributions.png",
-  width = 3000,
-  height = 2000,
-  res = 300
-)
-par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
-
-# AIPW - Cross-Fitted Method
-plot(
-  density(results_inc_mix$model1_cf$aipw$bootstrap_samples),
-  main = paste0("AIPW: Cross-Fitted (k=", k_folds, ")"),
-  xlab = "ATT",
-  col = "blue",
-  lwd = 2,
-  xlim = range(c(
-    results_inc_mix$model1_cf$aipw$bootstrap_samples,
-    results_inc_mix$model2_cf$aipw$bootstrap_samples,
-    results_inc_mix$model3_cf$aipw$bootstrap_samples,
-    results_inc_mix$model4_cf$aipw$bootstrap_samples
-  ))
-)
-lines(
-  density(results_inc_mix$model2_cf$aipw$bootstrap_samples),
-  col = "red",
-  lwd = 2
-)
-lines(
-  density(results_inc_mix$model3_cf$aipw$bootstrap_samples),
-  col = "green",
-  lwd = 2
-)
-lines(
-  density(results_inc_mix$model4_cf$aipw$bootstrap_samples),
-  col = "purple",
-  lwd = 2
-)
-legend(
-  "topleft",
-  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
-  col = c("blue", "red", "green", "purple"),
-  lwd = 2,
-  cex = 0.8
-)
-
-# DRS - Cross-Fitted Method
-plot(
-  density(results_inc_mix$model1_cf$drs$bootstrap_samples),
-  main = paste0("DRS: Cross-Fitted (k=", k_folds, ")"),
-  xlab = "ATT",
-  col = "blue",
-  lwd = 2,
-  xlim = range(c(
-    results_inc_mix$model1_cf$drs$bootstrap_samples,
-    results_inc_mix$model2_cf$drs$bootstrap_samples,
-    results_inc_mix$model3_cf$drs$bootstrap_samples,
-    results_inc_mix$model4_cf$drs$bootstrap_samples
-  ))
-)
-lines(
-  density(results_inc_mix$model2_cf$drs$bootstrap_samples),
-  col = "red",
-  lwd = 2
-)
-lines(
-  density(results_inc_mix$model3_cf$drs$bootstrap_samples),
-  col = "green",
-  lwd = 2
-)
-lines(
-  density(results_inc_mix$model4_cf$drs$bootstrap_samples),
-  col = "purple",
-  lwd = 2
-)
-legend(
-  "topleft",
-  legend = c("Model 1", "Model 2", "Model 3", "Model 4"),
-  col = c("blue", "red", "green", "purple"),
-  lwd = 2,
-  cex = 0.8
-)
-
-par(mfrow = c(1, 1))
-dev.off()
-
-cat(
-  "Comparison plot saved to: results/outcome/crossfitting/inc_mix/figures/model_comparison_distributions.png\n"
+plot_model_comparison(
+  results = list(
+    model1_cf = results_inc_mix$model1_cf,
+    model2_cf = results_inc_mix$model2_cf,
+    model3_cf = results_inc_mix$model3_cf,
+    model4_cf = results_inc_mix$model4_cf
+  ),
+  save_path = "results/outcome/crossfitting/inc_mix/figures/model_comparison_distributions.png",
+  method = "cf",
+  aipw_title = paste0("AIPW: Cross-Fitted (k=", k_folds, ")"),
+  drs_title = paste0("DRS: Cross-Fitted (k=", k_folds, ")")
 )
 
 # -----------------------------------------------------------------------------

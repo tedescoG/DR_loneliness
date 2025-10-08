@@ -1920,3 +1920,141 @@ extract_balance = function(result, model_num, method) {
     NULL
   }
 }
+
+plot_model_comparison <- function(results,
+                                   save_path,
+                                   width = 3000,
+                                   height = 2000,
+                                   res = 300,
+                                   method = "reweight",
+                                   colors = c("blue", "red", "green", "purple"),
+                                   ylim_padding = 1.05,
+                                   aipw_title = "AIPW: Reweight Method",
+                                   drs_title = "DRS: Reweight Method") {
+  #' Plot Model Comparison Distributions
+  #'
+  #' Creates a comparison plot of bootstrap distributions for multiple models,
+  #' showing both AIPW and DRS methods side by side. Displays the plot and saves to file.
+  #'
+  #' @param results A list of model results, each containing `aipw` and `drs`
+  #'   components with `bootstrap_samples`
+  #' @param save_path Path where the plot should be saved (PNG format)
+  #' @param width Plot width in pixels (default: 3000)
+  #' @param height Plot height in pixels (default: 2000)
+  #' @param res Resolution in DPI (default: 300)
+  #' @param method Method name to extract from results (default: "reweight")
+  #' @param colors Vector of colors for each model (default: blue, red, green, purple)
+  #' @param ylim_padding Padding factor for y-axis limit (default: 1.05 for 5% padding)
+  #' @param aipw_title Title for AIPW panel (default: "AIPW: Reweight Method")
+  #' @param drs_title Title for DRS panel (default: "DRS: Reweight Method")
+  #'
+  #' @return NULL (displays plot and saves to file)
+
+  # Extract model names
+  model_names <- names(results)
+  n_models <- length(model_names)
+
+  # Ensure we have enough colors
+  if (length(colors) < n_models) {
+    colors <- rep(colors, length.out = n_models)
+  }
+
+  # === AIPW Panel ===
+
+  # Extract all AIPW bootstrap samples
+  aipw_samples <- lapply(results, function(x) {
+    x[[method]]$aipw$bootstrap_samples
+  })
+
+  # Calculate densities
+  aipw_densities <- lapply(aipw_samples, density)
+
+  # Calculate y-axis limit
+  aipw_ylim <- max(sapply(aipw_densities, function(d) max(d$y)))
+
+  # Calculate x-axis limit
+  aipw_xlim <- range(unlist(aipw_samples))
+
+  # === DRS Panel ===
+
+  # Extract all DRS bootstrap samples
+  drs_samples <- lapply(results, function(x) {
+    x[[method]]$drs$bootstrap_samples
+  })
+
+  # Calculate densities
+  drs_densities <- lapply(drs_samples, density)
+
+  # Calculate y-axis limit
+  drs_ylim <- max(sapply(drs_densities, function(d) max(d$y)))
+
+  # Calculate x-axis limit
+  drs_xlim <- range(unlist(drs_samples))
+
+  # Create plot function (used for both display and save)
+  create_plot <- function() {
+    par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+
+    # AIPW plot
+    plot(
+      aipw_densities[[1]],
+      main = aipw_title,
+      xlab = "ATT",
+      col = colors[1],
+      lwd = 2,
+      xlim = aipw_xlim,
+      ylim = c(0, aipw_ylim * ylim_padding)
+    )
+
+    if (n_models > 1) {
+      for (i in 2:n_models) {
+        lines(aipw_densities[[i]], col = colors[i], lwd = 2)
+      }
+    }
+
+    legend(
+      "topleft",
+      legend = paste("Model", 1:n_models),
+      col = colors[1:n_models],
+      lwd = 2,
+      cex = 0.8
+    )
+
+    # DRS plot
+    plot(
+      drs_densities[[1]],
+      main = drs_title,
+      xlab = "ATT",
+      col = colors[1],
+      lwd = 2,
+      xlim = drs_xlim,
+      ylim = c(0, drs_ylim * ylim_padding)
+    )
+
+    if (n_models > 1) {
+      for (i in 2:n_models) {
+        lines(drs_densities[[i]], col = colors[i], lwd = 2)
+      }
+    }
+
+    legend(
+      "topleft",
+      legend = paste("Model", 1:n_models),
+      col = colors[1:n_models],
+      lwd = 2,
+      cex = 0.8
+    )
+
+    par(mfrow = c(1, 1))
+  }
+
+  # Display plot
+  create_plot()
+
+  # Save to file
+  png(save_path, width = width, height = height, res = res)
+  create_plot()
+  dev.off()
+
+  invisible(NULL)
+}
