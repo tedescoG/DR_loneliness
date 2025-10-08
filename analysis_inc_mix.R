@@ -95,7 +95,7 @@ results$model1_reweight = DR_att(
   plot_diagnostics = TRUE,
   ci_type = "all",
   sim = "balanced",
-  save_to = "results/outcome/inc_mix/figures"
+  save_to = "results/outcome/inc_mix/figures/model1"
 )
 
 # -----------------------------------------------------------------------------
@@ -122,7 +122,7 @@ results$model2_reweight = DR_att(
   plot_diagnostics = TRUE,
   ci_type = "all",
   sim = "balanced",
-  save_to = "results/outcome/inc_mix/figures"
+  save_to = "results/outcome/inc_mix/figures/model2"
 )
 
 # -----------------------------------------------------------------------------
@@ -149,7 +149,7 @@ results$model3_reweight = DR_att(
   plot_diagnostics = TRUE,
   ci_type = "all",
   sim = "balanced",
-  save_to = "results/outcome/inc_mix/figures"
+  save_to = "results/outcome/inc_mix/figures/model3"
 )
 
 # -----------------------------------------------------------------------------
@@ -176,7 +176,7 @@ results$model4_reweight = DR_att(
   plot_diagnostics = TRUE,
   ci_type = "all",
   sim = "balanced",
-  save_to = "results/outcome/inc_mix/figures"
+  save_to = "results/outcome/inc_mix/figures/model4"
 )
 
 # =============================================================================
