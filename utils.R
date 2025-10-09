@@ -230,7 +230,6 @@ process_tune_combination = function(
   #' @param x data.frame - covariate matrix
   #' @param y numeric - binary treatment indicator (0/1)
   #' @param method character - balance metric ("es.mean", "es.max", "ks.mean", "ks.max")
-  #' @param seed integer - random seed for reproducibility
   #'
   #' @return list with combination info, best balance value, and optimal iterations
 
@@ -263,7 +262,6 @@ process_tune_combination = function(
   }
 
   # Fit GBM model on full dataset
-  set.seed(seed)
   model = do.call(
     "gbm.fit",
     c(list(x = x, y = y), gbm_params, verbose = FALSE)
@@ -369,7 +367,8 @@ tune.gbm = function(
 
   # Match method argument
   method = match.arg(method)
-
+  RNGkind("L'Ecuyer-CMRG")
+  set.seed(seed)
   # Execute parallel or sequential processing
   if (parallel && nrow(param_combinations) > 1) {
     # Parallel processing
@@ -381,12 +380,11 @@ tune.gbm = function(
           param_combinations,
           x,
           y,
-          method,
-          seed = seed
+          method
         )
       },
       mc.cores = n.cores,
-      mc.set.seed = F
+      mc.set.seed = T
     )
   } else {
     # Sequential processing
@@ -814,7 +812,7 @@ cf_drs_att = function(
     test_data = data[test_idx, ]
 
     # Fit propensity score model on K-1 folds
-    set.seed(seed)
+    set.seed(seed + fold)
     ps_fit = do.call(
       "ps",
       c(
@@ -1049,7 +1047,7 @@ boot_iter = function(
         # Create K folds with stratification
         # Use indices to create unique seed for each bootstrap iteration
         stratify_var = if (stratify_folds) treatment else NULL
-        set.seed(seed_offset + min(indices))
+        set.seed(seed_offset + sum(indices))
         folds = vfold_cv(
           boot_data,
           v = k,
@@ -1072,7 +1070,7 @@ boot_iter = function(
           test_data = boot_data[test_idx, ]
 
           # Fit propensity score model on K-1 folds
-          set.seed(seed_offset) # Fixed seed for GBM within bootstrap
+          set.seed(seed_offset + fold) # Fixed seed for GBM within bootstrap
           ps_fit = do.call(
             "ps",
             c(
@@ -1921,7 +1919,7 @@ extract_balance = function(result, model_num, method) {
   }
 }
 
-plot_model_comparison <- function(
+plot_model_comparison = function(
   results,
   save_path,
   width = 3000,
@@ -1951,48 +1949,48 @@ plot_model_comparison <- function(
   #' @return NULL (displays plot and saves to file)
 
   # Extract model names
-  model_names <- names(results)
-  n_models <- length(model_names)
+  model_names = names(results)
+  n_models = length(model_names)
 
   # Ensure we have enough colors
   if (length(colors) < n_models) {
-    colors <- rep(colors, length.out = n_models)
+    colors = rep(colors, length.out = n_models)
   }
 
   # === AIPW Panel ===
 
   # Extract all AIPW bootstrap samples
-  aipw_samples <- lapply(results, function(x) {
+  aipw_samples = lapply(results, function(x) {
     x$aipw$bootstrap_samples
   })
 
   # Calculate densities
-  aipw_densities <- lapply(aipw_samples, density)
+  aipw_densities = lapply(aipw_samples, density)
 
   # Calculate y-axis limit
-  aipw_ylim <- max(sapply(aipw_densities, function(d) max(d$y)))
+  aipw_ylim = max(sapply(aipw_densities, function(d) max(d$y)))
 
   # Calculate x-axis limit
-  aipw_xlim <- range(unlist(aipw_samples))
+  aipw_xlim = range(unlist(aipw_samples))
 
   # === DRS Panel ===
 
   # Extract all DRS bootstrap samples
-  drs_samples <- lapply(results, function(x) {
+  drs_samples = lapply(results, function(x) {
     x$drs$bootstrap_samples
   })
 
   # Calculate densities
-  drs_densities <- lapply(drs_samples, density)
+  drs_densities = lapply(drs_samples, density)
 
   # Calculate y-axis limit
-  drs_ylim <- max(sapply(drs_densities, function(d) max(d$y)))
+  drs_ylim = max(sapply(drs_densities, function(d) max(d$y)))
 
   # Calculate x-axis limit
-  drs_xlim <- range(unlist(drs_samples))
+  drs_xlim = range(unlist(drs_samples))
 
   # Create plot function (used for both display and save)
-  create_plot <- function() {
+  create_plot = function() {
     par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
 
     # AIPW plot
@@ -2059,7 +2057,7 @@ plot_model_comparison <- function(
   invisible(NULL)
 }
 
-plot_bootstrap_histograms <- function(
+plot_bootstrap_histograms = function(
   results,
   save_path,
   width = 3000,
@@ -2084,19 +2082,19 @@ plot_bootstrap_histograms <- function(
   #' @return NULL (displays plot and saves to file)
 
   # Extract model names and ensure we have 4 models
-  model_names <- names(results)
+  model_names = names(results)
   if (length(model_names) != 4) {
     stop("This function requires exactly 4 models")
   }
 
   # Create plot function (used for both display and save)
-  create_plot <- function() {
+  create_plot = function() {
     par(mfrow = c(2, 4), mar = c(4, 4, 3, 1))
 
     # Top row: DRS
     for (i in 1:4) {
-      drs_samples <- results[[i]]$drs$bootstrap_samples
-      drs_estimate <- results[[i]]$drs$att
+      drs_samples = results[[i]]$drs$bootstrap_samples
+      drs_estimate = results[[i]]$drs$att
 
       hist(
         drs_samples,
@@ -2112,8 +2110,8 @@ plot_bootstrap_histograms <- function(
 
     # Bottom row: AIPW
     for (i in 1:4) {
-      aipw_samples <- results[[i]]$aipw$bootstrap_samples
-      aipw_estimate <- results[[i]]$aipw$att
+      aipw_samples = results[[i]]$aipw$bootstrap_samples
+      aipw_estimate = results[[i]]$aipw$att
 
       hist(
         aipw_samples,
