@@ -49,7 +49,7 @@ outcome_formula_4 = "baseline_lone + baseline_depr + female + age_cat + edu +
                      ppl_infected + income_loss + neighborhood" # Full adjustment
 
 # Bootstrap parameters
-n_boot = 5000
+n_boot = 500
 n_cores = NULL # Auto-detect
 k_folds = 5 # Number of folds for cross-fitting
 
