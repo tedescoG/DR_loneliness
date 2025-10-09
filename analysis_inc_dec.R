@@ -1,10 +1,9 @@
-# Bootstrap Doubly Robust ATT Estimation Analysis - Complete Comparison
+# Bootstrap Doubly Robust ATT Estimation Analysis
 # Comparison: Increase vs Decrease
-# Using refactored utils2.R with unified DR_att() function
 #
 # This script compares:
 # - 4 outcome model specifications (Model 1-4)
-# - Reweight estimation approach only
+# - Reweight estimation approach
 # - Balanced bootstrap sampling
 # - All available confidence intervals (norm, basic, perc)
 
