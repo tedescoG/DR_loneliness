@@ -36,13 +36,10 @@ ps_formula = as.formula(
       marital +
       coliving +
       health_pre +
-      kinless +
       chronic +
       death_due_covid +
       ppl_infected +
       income_loss +
-      job_loss +
-      support +
       neighborhood +
       baseline_depr +
       baseline_lone
