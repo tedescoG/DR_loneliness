@@ -1497,6 +1497,23 @@ DR_att = function(
   aipw_se = sd(aipw_boots)
   drs_se = sd(drs_boots)
 
+  # Perform Shapiro-Wilk normality tests
+  aipw_shapiro = tryCatch(
+    shapiro.test(aipw_boots),
+    error = function(e) {
+      warning(sprintf("Shapiro-Wilk test failed for AIPW: %s", e$message))
+      list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
+    }
+  )
+
+  drs_shapiro = tryCatch(
+    shapiro.test(drs_boots),
+    error = function(e) {
+      warning(sprintf("Shapiro-Wilk test failed for DRS: %s", e$message))
+      list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
+    }
+  )
+
   # Compute confidence intervals using boot.ci()
   # We need to filter the boot object to remove NA rows
   boot_result_filtered = boot_result
@@ -1615,6 +1632,22 @@ DR_att = function(
       ))
     }
 
+    # Display Shapiro-Wilk test results for AIPW
+    cat("\nNormality Test (Shapiro-Wilk):\n")
+    if (!is.na(aipw_shapiro$p.value)) {
+      cat(sprintf(
+        "  W statistic: %.4f\n",
+        aipw_shapiro$statistic
+      ))
+      cat(sprintf(
+        "  p-value:     %.4f %s\n",
+        aipw_shapiro$p.value,
+        ifelse(aipw_shapiro$p.value < 0.05, "(reject normality at 0.05 level)", "(fail to reject normality)")
+      ))
+    } else {
+      cat("  Test failed (likely due to sample size or other issues)\n")
+    }
+
     cat("\n=== DRS Results ===\n")
     cat(sprintf("ATT estimate:     %.4f\n", drs_point_att))
     cat(sprintf("Standard error:   %.4f\n", drs_se))
@@ -1640,6 +1673,22 @@ DR_att = function(
         drs_ci_percentile[1],
         drs_ci_percentile[2]
       ))
+    }
+
+    # Display Shapiro-Wilk test results for DRS
+    cat("\nNormality Test (Shapiro-Wilk):\n")
+    if (!is.na(drs_shapiro$p.value)) {
+      cat(sprintf(
+        "  W statistic: %.4f\n",
+        drs_shapiro$statistic
+      ))
+      cat(sprintf(
+        "  p-value:     %.4f %s\n",
+        drs_shapiro$p.value,
+        ifelse(drs_shapiro$p.value < 0.05, "(reject normality at 0.05 level)", "(fail to reject normality)")
+      ))
+    } else {
+      cat("  Test failed (likely due to sample size or other issues)\n")
     }
 
     # Display balance diagnostics if available
@@ -1859,7 +1908,8 @@ DR_att = function(
       ci_percentile = aipw_ci_percentile,
       pval = aipw_pval,
       bootstrap_samples = aipw_boots,
-      boot_ci_object = aipw_ci
+      boot_ci_object = aipw_ci,
+      shapiro_test = aipw_shapiro  # Add Shapiro-Wilk test results
     ),
     drs = list(
       att = drs_point_att,
@@ -1869,7 +1919,8 @@ DR_att = function(
       ci_percentile = drs_ci_percentile,
       pval = drs_pval,
       bootstrap_samples = drs_boots,
-      boot_ci_object = drs_ci
+      boot_ci_object = drs_ci,
+      shapiro_test = drs_shapiro  # Add Shapiro-Wilk test results
     ),
     n_boot = length(aipw_boots),
     n_failed = n_failed,
@@ -1896,6 +1947,8 @@ extract_results = function(result, model_num, method, estimator) {
     CI_Perc_Lower = est$ci_percentile[1],
     CI_Perc_Upper = est$ci_percentile[2],
     p_value = est$pval,
+    Shapiro_W = ifelse(!is.null(est$shapiro_test), est$shapiro_test$statistic, NA),
+    Shapiro_p = ifelse(!is.null(est$shapiro_test), est$shapiro_test$p.value, NA),
     n_boot = result$n_boot,
     n_failed = result$n_failed
   )

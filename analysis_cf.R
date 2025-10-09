@@ -27,10 +27,13 @@ ps_formula = as.formula(
       marital +
       coliving +
       health_pre +
+      kinless +
       chronic +
       death_due_covid +
       ppl_infected +
       income_loss +
+      job_loss +
+      support +
       neighborhood +
       baseline_depr +
       baseline_lone
@@ -44,9 +47,9 @@ outcome_formula_2 = "baseline_lone" # Just baseline loneliness
 outcome_formula_3 = "baseline_lone + baseline_depr" # Baseline mental health
 
 outcome_formula_4 = "baseline_lone + baseline_depr + female + age_cat + edu +
-                     emp_status + income + marital + coliving +
-                     health_pre + chronic + death_due_covid +
-                     ppl_infected + income_loss + neighborhood" # Full adjustment
+                     emp_status + income + marital + coliving + kinless + 
+                     health_pre + chronic + death_due_covid + job_loss + 
+                     support + ppl_infected + income_loss + neighborhood" # Full adjustment
 
 # Bootstrap parameters
 n_boot = 500

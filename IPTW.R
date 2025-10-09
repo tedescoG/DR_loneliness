@@ -36,10 +36,13 @@ ps_formula = as.formula(
       marital +
       coliving +
       health_pre +
+      kinless +
       chronic +
       death_due_covid +
       ppl_infected +
       income_loss +
+      job_loss +
+      support +
       neighborhood +
       baseline_depr +
       baseline_lone
@@ -151,7 +154,7 @@ saveRDS(
 )
 
 # Saving weights in df
-inc_dec$ipsw = get.weights(ps_inc_dec, stop.method = "es.mean")
+inc_dec$wgt = get.weights(ps_inc_dec, stop.method = "es.mean")
 
 
 # INCREASE VS MIX ---------------------------------------------------------------------------------####
@@ -256,15 +259,25 @@ saveRDS(
 )
 
 # Saving weights in df
-inc_mix$ipsw = get.weights(ps_inc_mix, stop.method = "es.mean")
+inc_mix$wgt = get.weights(ps_inc_mix, stop.method = "es.mean")
 
 
 # Save data with weights
-d$iptw = ifelse(
-  d$remote_contact == "increase",
-  1,
-  ifelse(d$remote_contact == "decrease", inc_dec$ipsw, inc_mix$ipsw)
-)
+# Initialize weights with NA
+d$iptw = NA
+
+# Assign weights correctly based on treatment group
+# Treatment group (increase) gets weight = 1 for ATT
+d$iptw[d$remote_contact == "increase"] = 1
+
+# Control groups get their respective propensity score weights
+# Match by row names or create index to ensure correct alignment
+d$iptw[d$remote_contact == "decrease"] =
+  inc_dec$wgt[inc_dec$remote_contact == 0]
+
+d$iptw[d$remote_contact == "mix"] =
+  inc_mix$wgt[inc_mix$remote_contact == 0]
+
 
 saveRDS(
   d,

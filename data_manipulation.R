@@ -11,7 +11,7 @@ df = read_dta("data/pooled_ita_w.dta") %>%
   select(-c(1:6)) %>%
   as.data.frame()
 
-# Covariate definitions
+# Covariate definitions ----------------------------------------------------------------------------------####
 
 # Sex
 table(df$F2, useNA = "ifany")
@@ -79,6 +79,11 @@ marital = factor(
 )
 table(marital)
 
+# Kin available
+table(df$A1_10, useNA = "ifany")
+kinless = ifelse(df$A1_10 == 1, 1, 0)
+table(kinless)
+
 # Co-living
 # check whether respondent lived alone before and during lockdown
 coliving = ifelse((df$A2_10 == 1) & (df$A3_1 == 1), 0, 1)
@@ -112,6 +117,15 @@ ppl_infected = ifelse(replace_na(df$E1_8, 0) == 1, 1, 0)
 table(df$E1_4, useNA = "ifany")
 income_loss = ifelse(replace_na(df$E1_4, 0) == 1, 1, 0)
 
+# Job loss during COVID
+table(df$E1_5, useNA = "ifany")
+job_loss = ifelse(replace_na(df$E1_5, 0) == 1, 1, 0)
+table(job_loss, useNA = "ifany")
+
+# Received help/support during COVID
+table(df$E2_7, useNA = "ifany")
+support = ifelse(df$E2_7 == 1, 0, 1)
+table(support)
 
 # Self-reported depression pre-COVID (Baseline)
 table(df$C2, useNA = "ifany")
@@ -139,14 +153,13 @@ neighborhood = factor(
   labels = c("big city", "suburb", "town", "village", "countryside")
 )
 
-
-# OUTCOME: severe lonliness
+# OUTCOME ------------------------------------------------------------------------------------------------####
 table(df$C3, useNA = "ifany")
 loneliness = ifelse(df$C3 %in% c(4, 3), 1, 0)
 table(loneliness)
 
 
-# MULTINOMIAL TREATMENT: remote contact pattern
+# MULTINOMIAL TREATMENT ----------------------------------------------------------------------------------####
 # Questionnaire items about increase
 B5 = df[, grep("^B5", names(df))]
 B5 = data.frame(lapply(B5, function(x) as.numeric(x)))
@@ -184,7 +197,7 @@ remote_contact = factor(
 )
 
 
-# Saving the final data
+# Saving the final data ----------------------------------------------------------------------------------####
 data_clean = data.frame(
   female,
   age_cat,
@@ -194,10 +207,13 @@ data_clean = data.frame(
   marital,
   coliving,
   health_pre,
+  kinless,
   chronic,
   death_due_covid,
   ppl_infected,
   income_loss,
+  job_loss,
+  support,
   neighborhood,
   baseline_depr,
   baseline_lone,
