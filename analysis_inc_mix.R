@@ -39,7 +39,7 @@ ps_formula = as.formula(
       chronic +
       death_due_covid +
       ppl_infected +
-      support +
+      income_loss +
       neighborhood +
       baseline_depr +
       baseline_lone
