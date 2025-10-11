@@ -1,8 +1,8 @@
-# COMBINED SUMMARY: AIPW AND DRS ANALYSES
+# COMBINED SUMMARY: DRW AND DRS ANALYSES
 #
-# This script loads all 48 analyses (24 AIPW + 24 DRS) and creates:
+# This script loads all 48 analyses (24 DRW + 24 DRS) and creates:
 # - Master summary table with all 48 analyses
-# - Comparison plots: AIPW vs DRS
+# - Comparison plots: DRW vs DRS
 # - Model complexity effects
 # - Cross-fitting effects
 
@@ -19,10 +19,10 @@ cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
 # LOAD ALL RESULTS
 # =============================================================================
 
-# Load AIPW workspace
-cat("Loading AIPW results...\n")
-aipw_workspace = readRDS("results/outcome/AIPW/AIPW_complete_workspace.rds")
-aipw_summary = aipw_workspace$final_summary
+# Load DRW workspace
+cat("Loading DRW results...\n")
+drw_workspace = readRDS("results/outcome/DRW/DRW_complete_workspace.rds")
+drw_summary = drw_workspace$final_summary
 
 # Load DRS workspace
 cat("Loading DRS results...\n")
@@ -40,9 +40,9 @@ cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
 cat("CREATING MASTER SUMMARY TABLE (48 ANALYSES)\n")
 cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
 
-# Combine AIPW and DRS summaries
+# Combine DRW and DRS summaries
 master_summary_all = rbind(
-  aipw_summary,
+  drw_summary,
   drs_summary
 )
 
@@ -66,15 +66,17 @@ write.csv(
   row.names = FALSE
 )
 
-cat("✓ Master summary (48 analyses) saved to:",
-    "results/outcome/combined/master_summary_all_48.csv\n\n")
+cat(
+  "✓ Master summary (48 analyses) saved to:",
+  "results/outcome/combined/master_summary_all_48.csv\n\n"
+)
 
 # Print summary
 cat("=== MASTER SUMMARY TABLE (ALL 48 ANALYSES) ===\n\n")
 print(master_summary_all, digits = 4)
 
 # =============================================================================
-# COMPARISON PLOTS: AIPW vs DRS
+# COMPARISON PLOTS: DRW vs DRS
 # =============================================================================
 
 cat("\n\n")
@@ -82,9 +84,9 @@ cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
 cat("CREATING COMPARISON PLOTS\n")
 cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
 
-# Function to create AIPW vs DRS comparison plot
+# Function to create DRW vs DRS comparison plot
 plot_estimator_comparison = function(
-  aipw_results,
+  drw_results,
   drs_results,
   comparison_label,
   k_label,
@@ -93,36 +95,36 @@ plot_estimator_comparison = function(
   height = 2000,
   res = 300
 ) {
-  #' Compare AIPW and DRS bootstrap distributions
+  #' Compare DRW and DRS bootstrap distributions
   #'
   #' Creates a 2x4 plot: rows are estimators, columns are models
 
   # Extract bootstrap samples
-  aipw_samples = lapply(aipw_results, function(x) x$aipw$bootstrap_samples)
+  drw_samples = lapply(drw_results, function(x) x$drw$bootstrap_samples)
   drs_samples = lapply(drs_results, function(x) x$drs$bootstrap_samples)
 
   # Extract point estimates
-  aipw_estimates = sapply(aipw_results, function(x) x$aipw$att)
+  drw_estimates = sapply(drw_results, function(x) x$drw$att)
   drs_estimates = sapply(drs_results, function(x) x$drs$att)
 
   # Create plot function
   create_plot = function() {
     par(mfrow = c(2, 4), mar = c(4, 4, 3, 1))
 
-    # Top row: AIPW
+    # Top row: DRW
     for (model in 1:4) {
-      dens = density(aipw_samples[[model]])
+      dens = density(drw_samples[[model]])
 
       hist(
-        aipw_samples[[model]],
+        drw_samples[[model]],
         breaks = 30,
         col = "lightblue",
         border = "white",
-        main = sprintf("Model %d - AIPW", model),
+        main = sprintf("Model %d - DRW", model),
         xlab = "ATT",
         ylab = "Frequency"
       )
-      abline(v = aipw_estimates[model], col = "blue", lwd = 2, lty = 2)
+      abline(v = drw_estimates[model], col = "blue", lwd = 2, lty = 2)
     }
 
     # Bottom row: DRS
@@ -164,16 +166,16 @@ plot_estimator_comparison = function(
   invisible(NULL)
 }
 
-# Create AIPW vs DRS plots for each comparison and k
+# Create DRW vs DRS plots for each comparison and k
 comparisons = list(
   inc_dec = list(
     label = "Increase vs Decrease",
-    aipw = aipw_workspace$inc_dec,
+    drw = drw_workspace$inc_dec,
     drs = drs_workspace$inc_dec
   ),
   inc_mix = list(
     label = "Increase vs Mix",
-    aipw = aipw_workspace$inc_mix,
+    drw = drw_workspace$inc_mix,
     drs = drs_workspace$inc_mix
   )
 )
@@ -186,19 +188,19 @@ for (comp_name in names(comparisons)) {
   for (k in c(1, 2, 3)) {
     # Extract results for this k
     k_pattern = sprintf("^k%d_", k)
-    aipw_k = comp$aipw[grep(k_pattern, names(comp$aipw))]
+    drw_k = comp$drw[grep(k_pattern, names(comp$drw))]
     drs_k = comp$drs[grep(k_pattern, names(comp$drs))]
 
     # Create plot
     k_label = if (k == 1) "k=1 (No CF)" else sprintf("k=%d", k)
     save_path = sprintf(
-      "results/outcome/combined/AIPW_vs_DRS_%s_k%d.png",
+      "results/outcome/combined/DRW_vs_DRS_%s_k%d.png",
       comp_name,
       k
     )
 
     plot_estimator_comparison(
-      aipw_results = aipw_k,
+      drw_results = drw_k,
       drs_results = drs_k,
       comparison_label = comp$label,
       k_label = k_label,
@@ -245,25 +247,25 @@ plot_model_complexity = function(
             summary_data$K_Fold == k,
         ]
 
-        # Separate AIPW and DRS
-        aipw_data = data_subset[data_subset$Estimator == "AIPW", ]
+        # Separate DRW and DRS
+        drw_data = data_subset[data_subset$Estimator == "DRW", ]
         drs_data = data_subset[data_subset$Estimator == "DRS", ]
 
         # Sort by model
-        aipw_data = aipw_data[order(aipw_data$Model), ]
+        drw_data = drw_data[order(drw_data$Model), ]
         drs_data = drs_data[order(drs_data$Model), ]
 
         # Plot
         plot(
-          aipw_data$Model,
-          aipw_data$ATT,
+          drw_data$Model,
+          drw_data$ATT,
           type = "b",
           col = "blue",
           lwd = 2,
           pch = 16,
           ylim = range(c(
-            aipw_data$CI_Perc_Lower,
-            aipw_data$CI_Perc_Upper,
+            drw_data$CI_Perc_Lower,
+            drw_data$CI_Perc_Upper,
             drs_data$CI_Perc_Lower,
             drs_data$CI_Perc_Upper
           )),
@@ -274,12 +276,12 @@ plot_model_complexity = function(
         )
         axis(1, at = 1:4)
 
-        # Add confidence intervals for AIPW
+        # Add confidence intervals for DRW
         arrows(
-          aipw_data$Model,
-          aipw_data$CI_Perc_Lower,
-          aipw_data$Model,
-          aipw_data$CI_Perc_Upper,
+          drw_data$Model,
+          drw_data$CI_Perc_Lower,
+          drw_data$Model,
+          drw_data$CI_Perc_Upper,
           code = 3,
           angle = 90,
           length = 0.05,
@@ -315,7 +317,7 @@ plot_model_complexity = function(
         if (comp == "inc_dec" && k == 1) {
           legend(
             "topright",
-            legend = c("AIPW", "DRS"),
+            legend = c("DRW", "DRS"),
             col = c("blue", "darkgreen"),
             lwd = 2,
             pch = c(16, 17),
@@ -382,25 +384,25 @@ plot_crossfitting_effects = function(
             summary_data$Model == model,
         ]
 
-        # Separate AIPW and DRS
-        aipw_data = data_subset[data_subset$Estimator == "AIPW", ]
+        # Separate DRW and DRS
+        drw_data = data_subset[data_subset$Estimator == "DRW", ]
         drs_data = data_subset[data_subset$Estimator == "DRS", ]
 
         # Sort by k
-        aipw_data = aipw_data[order(aipw_data$K_Fold), ]
+        drw_data = drw_data[order(drw_data$K_Fold), ]
         drs_data = drs_data[order(drs_data$K_Fold), ]
 
         # Plot
         plot(
-          aipw_data$K_Fold,
-          aipw_data$ATT,
+          drw_data$K_Fold,
+          drw_data$ATT,
           type = "b",
           col = "blue",
           lwd = 2,
           pch = 16,
           ylim = range(c(
-            aipw_data$CI_Perc_Lower,
-            aipw_data$CI_Perc_Upper,
+            drw_data$CI_Perc_Lower,
+            drw_data$CI_Perc_Upper,
             drs_data$CI_Perc_Lower,
             drs_data$CI_Perc_Upper
           )),
@@ -411,12 +413,12 @@ plot_crossfitting_effects = function(
         )
         axis(1, at = c(1, 2, 3))
 
-        # Add confidence intervals for AIPW
+        # Add confidence intervals for DRW
         arrows(
-          aipw_data$K_Fold,
-          aipw_data$CI_Perc_Lower,
-          aipw_data$K_Fold,
-          aipw_data$CI_Perc_Upper,
+          drw_data$K_Fold,
+          drw_data$CI_Perc_Lower,
+          drw_data$K_Fold,
+          drw_data$CI_Perc_Upper,
           code = 3,
           angle = 90,
           length = 0.05,
@@ -452,7 +454,7 @@ plot_crossfitting_effects = function(
         if (comp == "inc_dec" && model == 1) {
           legend(
             "topright",
-            legend = c("AIPW", "DRS"),
+            legend = c("DRW", "DRS"),
             col = c("blue", "darkgreen"),
             lwd = 2,
             pch = c(16, 17),
@@ -563,8 +565,14 @@ cat("COMBINED ANALYSIS COMPLETE!\n")
 cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
 
 cat("Summary of outputs:\n")
-cat("  - Master summary (48 analyses): results/outcome/combined/master_summary_all_48.csv\n")
-cat("  - AIPW vs DRS plots: results/outcome/combined/AIPW_vs_DRS_*.png\n")
-cat("  - Model complexity plot: results/outcome/combined/model_complexity_effects.png\n")
-cat("  - Cross-fitting effects plot: results/outcome/combined/crossfitting_effects.png\n")
+cat(
+  "  - Master summary (48 analyses): results/outcome/combined/master_summary_all_48.csv\n"
+)
+cat("  - DRW vs DRS plots: results/outcome/combined/DRW_vs_DRS_*.png\n")
+cat(
+  "  - Model complexity plot: results/outcome/combined/model_complexity_effects.png\n"
+)
+cat(
+  "  - Cross-fitting effects plot: results/outcome/combined/crossfitting_effects.png\n"
+)
 cat("\n")

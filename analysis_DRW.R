@@ -1,6 +1,6 @@
-# AIPW DOUBLY ROBUST ATT ESTIMATION - COMPREHENSIVE ANALYSIS
+# DRW DOUBLY ROBUST ATT ESTIMATION - COMPREHENSIVE ANALYSIS
 #
-# This script runs 24 AIPW analyses:
+# This script runs 24 DRW analyses:
 # - 2 pairwise comparisons: increase vs decrease, increase vs mix
 # - 3 cross-fitting approaches: k=1 (no CF), k=2, k=3
 # - 4 outcome models: intercept only, baseline loneliness, + depression, full
@@ -108,7 +108,7 @@ for (k in k_values) {
 
     # Build result path
     result_path = build_result_path(
-      estimator = "aipw",
+      estimator = "drw",
       comparison = "inc_dec",
       k = k,
       model = model
@@ -124,7 +124,7 @@ for (k in k_values) {
       f.out = outcome_models[[model]],
       data = d,
       gbm_params = gbm_params_inc_dec,
-      estimator = "aipw",
+      estimator = "drw",
       bootstrap_method = "reweight",
       cross_fitting = (k > 1),
       k = k,
@@ -167,26 +167,26 @@ cat("CREATING SUMMARIES FOR INC_DEC\n")
 cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
 
 # Create base directory for summaries
-summary_dir_inc_dec = "results/outcome/AIPW/inc_dec"
+summary_dir_inc_dec = "results/outcome/DRW/inc_dec"
 dir.create(summary_dir_inc_dec, showWarnings = FALSE, recursive = TRUE)
 
 # Build master summary table
 master_summary_inc_dec = build_master_summary(
   results_list = results_inc_dec,
-  estimator_name = "AIPW",
+  estimator_name = "DRW",
   comparison_name = "inc_dec"
 )
 
 # Save master summary
 write.csv(
   master_summary_inc_dec,
-  file.path(summary_dir_inc_dec, "AIPW_master_summary_inc_dec.csv"),
+  file.path(summary_dir_inc_dec, "DRW_master_summary_inc_dec.csv"),
   row.names = FALSE
 )
 
 cat(
   "\n✓ Master summary saved to:",
-  file.path(summary_dir_inc_dec, "AIPW_master_summary_inc_dec.csv"),
+  file.path(summary_dir_inc_dec, "DRW_master_summary_inc_dec.csv"),
   "\n"
 )
 
@@ -207,7 +207,7 @@ plot_kfold_comparison(
   results_k1 = results_k1_inc_dec,
   results_k2 = results_k2_inc_dec,
   results_k3 = results_k3_inc_dec,
-  estimator_name = "aipw",
+  estimator_name = "drw",
   comparison_label = "Increase vs Decrease",
   save_path = file.path(summary_dir_inc_dec, "kfold_comparison.png")
 )
@@ -225,7 +225,7 @@ for (k in k_values) {
   # Build summary for this k
   k_summary = build_master_summary(
     results_list = k_results,
-    estimator_name = "AIPW",
+    estimator_name = "DRW",
     comparison_name = "inc_dec"
   )
 
@@ -285,7 +285,7 @@ for (k in k_values) {
 
     # Build result path
     result_path = build_result_path(
-      estimator = "aipw",
+      estimator = "drw",
       comparison = "inc_mix",
       k = k,
       model = model
@@ -301,7 +301,7 @@ for (k in k_values) {
       f.out = outcome_models[[model]],
       data = d,
       gbm_params = gbm_params_inc_mix,
-      estimator = "aipw",
+      estimator = "drw",
       bootstrap_method = "reweight",
       cross_fitting = (k > 1),
       k = k,
@@ -344,26 +344,26 @@ cat("CREATING SUMMARIES FOR INC_MIX\n")
 cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
 
 # Create base directory for summaries
-summary_dir_inc_mix = "results/outcome/AIPW/inc_mix"
+summary_dir_inc_mix = "results/outcome/DRW/inc_mix"
 dir.create(summary_dir_inc_mix, showWarnings = FALSE, recursive = TRUE)
 
 # Build master summary table
 master_summary_inc_mix = build_master_summary(
   results_list = results_inc_mix,
-  estimator_name = "AIPW",
+  estimator_name = "DRW",
   comparison_name = "inc_mix"
 )
 
 # Save master summary
 write.csv(
   master_summary_inc_mix,
-  file.path(summary_dir_inc_mix, "AIPW_master_summary_inc_mix.csv"),
+  file.path(summary_dir_inc_mix, "DRW_master_summary_inc_mix.csv"),
   row.names = FALSE
 )
 
 cat(
   "\n✓ Master summary saved to:",
-  file.path(summary_dir_inc_mix, "AIPW_master_summary_inc_mix.csv"),
+  file.path(summary_dir_inc_mix, "DRW_master_summary_inc_mix.csv"),
   "\n"
 )
 
@@ -384,7 +384,7 @@ plot_kfold_comparison(
   results_k1 = results_k1_inc_mix,
   results_k2 = results_k2_inc_mix,
   results_k3 = results_k3_inc_mix,
-  estimator_name = "aipw",
+  estimator_name = "drw",
   comparison_label = "Increase vs Mix",
   save_path = file.path(summary_dir_inc_mix, "kfold_comparison.png")
 )
@@ -402,7 +402,7 @@ for (k in k_values) {
   # Build summary for this k
   k_summary = build_master_summary(
     results_list = k_results,
-    estimator_name = "AIPW",
+    estimator_name = "DRW",
     comparison_name = "inc_mix"
   )
 
@@ -431,32 +431,32 @@ for (k in k_values) {
 
 cat("\n\n")
 cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
-cat("FINAL AIPW SUMMARY (ALL 24 ANALYSES)\n")
+cat("FINAL DRW SUMMARY (ALL 24 ANALYSES)\n")
 cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
 
 # Combine both comparisons
-final_summary_aipw = rbind(
+final_summary_drw = rbind(
   master_summary_inc_dec,
   master_summary_inc_mix
 )
 
 # Save final summary
-dir.create("results/outcome/AIPW", showWarnings = FALSE, recursive = TRUE)
+dir.create("results/outcome/DRW", showWarnings = FALSE, recursive = TRUE)
 write.csv(
-  final_summary_aipw,
-  "results/outcome/AIPW/AIPW_master_summary_all_24.csv",
+  final_summary_drw,
+  "results/outcome/DRW/DRW_master_summary_all_24.csv",
   row.names = FALSE
 )
 
 cat(
-  "\n✓ Final AIPW master summary (24 analyses) saved to:",
-  "results/outcome/AIPW/AIPW_master_summary_all_24.csv",
+  "\n✓ Final DRW master summary (24 analyses) saved to:",
+  "results/outcome/DRW/DRW_master_summary_all_24.csv",
   "\n"
 )
 
 # Print final summary
-cat("\n=== FINAL AIPW SUMMARY (ALL 24 ANALYSES) ===\n\n")
-print(final_summary_aipw, digits = 4)
+cat("\n=== FINAL DRW SUMMARY (ALL 24 ANALYSES) ===\n\n")
+print(final_summary_drw, digits = 4)
 
 # Save complete workspace
 saveRDS(
@@ -465,22 +465,22 @@ saveRDS(
     inc_mix = results_inc_mix,
     master_summary_inc_dec = master_summary_inc_dec,
     master_summary_inc_mix = master_summary_inc_mix,
-    final_summary = final_summary_aipw
+    final_summary = final_summary_drw
   ),
-  "results/outcome/AIPW/AIPW_complete_workspace.rds"
+  "results/outcome/DRW/DRW_complete_workspace.rds"
 )
 
 cat(
-  "\n✓ Complete AIPW workspace saved to:",
-  "results/outcome/AIPW/AIPW_complete_workspace.rds",
+  "\n✓ Complete DRW workspace saved to:",
+  "results/outcome/DRW/DRW_complete_workspace.rds",
   "\n"
 )
 
 cat("\n\n")
 cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
-cat("AIPW ANALYSIS COMPLETE!\n")
+cat("DRW ANALYSIS COMPLETE!\n")
 cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
 cat(sprintf("\nTotal analyses run: 24\n"))
 cat(sprintf("Total bootstrap replications per analysis: %d\n", n_boot))
-cat(sprintf("Results saved to: results/outcome/AIPW/\n"))
+cat(sprintf("Results saved to: results/outcome/DRW/\n"))
 cat("\n")
