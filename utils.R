@@ -919,6 +919,7 @@ boot_iter = function(
   f.out,
   gbm_params = NULL,
   bootstrap_method = c("resample", "reweight"),
+  estimator = c("all", "aipw", "drs"),
   cross_fitting = FALSE,
   k = 5,
   stratify_folds = TRUE,
@@ -940,6 +941,7 @@ boot_iter = function(
   #' @param f.out character - outcome model formula (RHS only)
   #' @param gbm_params list - GBM parameters for ps() function (for reweight method)
   #' @param bootstrap_method character - "resample" (use existing weights) or "reweight" (re-estimate PS)
+  #' @param estimator character - which estimator to compute: "all" (both), "aipw", or "drs"
   #' @param cross_fitting logical - use cross-fitting or not
   #' @param k integer - number of cross-fitting folds
   #' @param stratify_folds logical - stratify folds by treatment (for cross-fitting)
@@ -947,13 +949,18 @@ boot_iter = function(
   #' @param seed_offset integer - base seed for reproducibility
   #' @param alpha numeric - propensity score truncation level (0 = no truncation)
   #'
-  #' @return numeric vector: c(aipw, drs, avg_asd, max_asd, ess)
+  #' @return numeric vector: c(aipw, drs, avg_asd, max_asd, ess) - uncomputed estimators are NA
 
   # Wrap entire function in tryCatch for error handling
   tryCatch(
     {
-      # Match bootstrap method
+      # Match arguments
       bootstrap_method = match.arg(bootstrap_method)
+      estimator = match.arg(estimator)
+
+      # Determine which estimators to compute
+      compute_aipw = estimator %in% c("all", "aipw")
+      compute_drs = estimator %in% c("all", "drs")
 
       # Resample data
       boot_data = data[indices, ]
@@ -973,23 +980,27 @@ boot_iter = function(
 
         if (bootstrap_method == "resample") {
           # Use existing weights from data
-          aipw_result = aipw_att(
-            outcome = outcome,
-            treatment = treatment,
-            f.out = f.out,
-            wgt = wgt,
-            data = boot_data,
-            verbose = FALSE
-          )
+          if (compute_aipw) {
+            aipw_result = aipw_att(
+              outcome = outcome,
+              treatment = treatment,
+              f.out = f.out,
+              wgt = wgt,
+              data = boot_data,
+              verbose = FALSE
+            )
+          }
 
-          drs_result = drs_att(
-            outcome = outcome,
-            treatment = treatment,
-            f.out = f.out,
-            wgt = wgt,
-            data = boot_data,
-            verbose = FALSE
-          )
+          if (compute_drs) {
+            drs_result = drs_att(
+              outcome = outcome,
+              treatment = treatment,
+              f.out = f.out,
+              wgt = wgt,
+              data = boot_data,
+              verbose = FALSE
+            )
+          }
 
           weights_vec = boot_data[[wgt]]
         } else {
@@ -1013,29 +1024,33 @@ boot_iter = function(
           boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
 
           # Compute estimates
-          aipw_result = aipw_att(
-            outcome = outcome,
-            treatment = treatment,
-            f.out = f.out,
-            wgt = "ps_wgt",
-            data = boot_data,
-            verbose = FALSE
-          )
+          if (compute_aipw) {
+            aipw_result = aipw_att(
+              outcome = outcome,
+              treatment = treatment,
+              f.out = f.out,
+              wgt = "ps_wgt",
+              data = boot_data,
+              verbose = FALSE
+            )
+          }
 
-          drs_result = drs_att(
-            outcome = outcome,
-            treatment = treatment,
-            f.out = f.out,
-            wgt = "ps_wgt",
-            data = boot_data,
-            verbose = FALSE
-          )
+          if (compute_drs) {
+            drs_result = drs_att(
+              outcome = outcome,
+              treatment = treatment,
+              f.out = f.out,
+              wgt = "ps_wgt",
+              data = boot_data,
+              verbose = FALSE
+            )
+          }
 
           weights_vec = boot_data$ps_wgt
         }
 
-        aipw_est = aipw_result$att
-        drs_est = drs_result$att
+        aipw_est = if (compute_aipw) aipw_result$att else NA_real_
+        drs_est = if (compute_drs) drs_result$att else NA_real_
       } else {
         # ========== CROSS-FITTED ESTIMATION ==========
 
@@ -1122,59 +1137,69 @@ boot_iter = function(
           )
 
           # Compute fold-specific AIPW estimate
-          Y_k = Y[test_idx]
-          Z_k = Z[test_idx]
-          weights_k = weights[test_idx]
-          mu_hat_0_k = mu_hat_0[test_idx]
-          N1_k = sum(Z_k)
+          if (compute_aipw) {
+            Y_k = Y[test_idx]
+            Z_k = Z[test_idx]
+            weights_k = weights[test_idx]
+            mu_hat_0_k = mu_hat_0[test_idx]
+            N1_k = sum(Z_k)
 
-          aipw_fold_estimates[fold] = (1 / N1_k) *
-            sum((Z_k - (1 - Z_k) * weights_k) * (Y_k - mu_hat_0_k))
-
-          # Compute fold-specific DRS estimate
-          # Create weighted survey design for fold k
-          test_data_wgt = test_data
-          test_data_wgt$ps_wgt = weights[test_idx]
-
-          weighted_design = svydesign(
-            ids = ~1,
-            weights = ~ps_wgt,
-            data = test_data_wgt
-          )
-
-          # Build outcome model formula
-          if (f.out != "1") {
-            formula_str = paste(outcome, "~", treatment, "+", f.out)
-          } else {
-            formula_str = paste(outcome, "~", treatment)
+            aipw_fold_estimates[fold] = (1 / N1_k) *
+              sum((Z_k - (1 - Z_k) * weights_k) * (Y_k - mu_hat_0_k))
           }
 
-          # Fit weighted outcome model on fold k
-          fit = svyglm(
-            formula = as.formula(formula_str),
-            family = 'quasibinomial',
-            design = weighted_design
-          )
+          # Compute fold-specific DRS estimate
+          if (compute_drs) {
+            # Create weighted survey design for fold k
+            test_data_wgt = test_data
+            test_data_wgt$ps_wgt = weights[test_idx]
 
-          # Predict counterfactuals for treated units in fold k
-          treated_k = test_data_wgt[test_data_wgt[[treatment]] == 1, ]
-          counterfactual_k = treated_k
-          counterfactual_k[[treatment]] = 0
+            weighted_design = svydesign(
+              ids = ~1,
+              weights = ~ps_wgt,
+              data = test_data_wgt
+            )
 
-          mu0_drs_k = predict(
-            fit,
-            newdata = counterfactual_k,
-            type = "response"
-          )
-          mu_hat_0_drs = mean(mu0_drs_k)
-          mu_hat_1_drs = mean(Y_k[Z_k == 1])
+            # Build outcome model formula
+            if (f.out != "1") {
+              formula_str = paste(outcome, "~", treatment, "+", f.out)
+            } else {
+              formula_str = paste(outcome, "~", treatment)
+            }
 
-          drs_fold_estimates[fold] = mu_hat_1_drs - mu_hat_0_drs
+            # Fit weighted outcome model on fold k
+            fit = svyglm(
+              formula = as.formula(formula_str),
+              family = 'quasibinomial',
+              design = weighted_design
+            )
+
+            # Predict counterfactuals for treated units in fold k
+            treated_k = test_data_wgt[test_data_wgt[[treatment]] == 1, ]
+            counterfactual_k = treated_k
+            counterfactual_k[[treatment]] = 0
+
+            # Extract Y_k and Z_k if not already done for AIPW
+            if (!compute_aipw) {
+              Y_k = Y[test_idx]
+              Z_k = Z[test_idx]
+            }
+
+            mu0_drs_k = predict(
+              fit,
+              newdata = counterfactual_k,
+              type = "response"
+            )
+            mu_hat_0_drs = mean(mu0_drs_k)
+            mu_hat_1_drs = mean(Y_k[Z_k == 1])
+
+            drs_fold_estimates[fold] = mu_hat_1_drs - mu_hat_0_drs
+          }
         }
 
         # Average across folds for final bootstrap estimates
-        aipw_est = mean(aipw_fold_estimates)
-        drs_est = mean(drs_fold_estimates)
+        aipw_est = if (compute_aipw) mean(aipw_fold_estimates) else NA_real_
+        drs_est = if (compute_drs) mean(drs_fold_estimates) else NA_real_
 
         # Use full sample weights for balance diagnostics
         weights_vec = weights
@@ -1276,6 +1301,7 @@ DR_att = function(
     n.minobsinnode = 10
   ),
   bootstrap_method = c("resample", "reweight"),
+  estimator = c("all", "aipw", "drs"),
   stratified = TRUE,
   wgt = "iptw",
   cross_fitting = FALSE,
@@ -1299,6 +1325,7 @@ DR_att = function(
   #' - Simulation schemes: ordinary or balanced bootstrap
   #' - Cross-fitting: TRUE or FALSE
   #' - Confidence intervals: normal, basic, percentile (no BCa)
+  #' - Estimator selection: both, AIPW only, or DRS only
   #'
   #' @param outcome character - name of outcome variable
   #' @param treatment character - name of treatment variable
@@ -1309,6 +1336,7 @@ DR_att = function(
   #' @param data data.frame - dataset (must contain wgt if bootstrap_method = "resample")
   #' @param gbm_params list - GBM parameters for ps() function
   #' @param bootstrap_method character - "resample" (faster) or "reweight" (more conservative)
+  #' @param estimator character - which estimator to run: "all" (both, default), "aipw", or "drs"
   #' @param stratified logical - use stratified bootstrap to maintain treatment/control proportions
   #' @param wgt character - name of propensity score weight column in data (for resample method)
   #' @param cross_fitting logical - use cross-fitting to reduce overfitting bias
@@ -1326,9 +1354,11 @@ DR_att = function(
   #' @param alpha numeric - propensity score truncation level (0 = no truncation)
   #'
   #' @return list with estimates, SEs, CIs, p-values, balance diagnostics, and bootstrap samples
+  #'   (only includes results for selected estimator(s))
 
   # Match and validate arguments
   bootstrap_method = match.arg(bootstrap_method)
+  estimator = match.arg(estimator)
   ci_type = match.arg(ci_type)
   sim = match.arg(sim)
 
@@ -1358,6 +1388,7 @@ DR_att = function(
     cat("Treated level:", treated_level, "\n")
     cat("Control level:", control_level, "\n")
     cat("Bootstrap method:", bootstrap_method, "\n")
+    cat("Estimator:", estimator, "\n")
     if (bootstrap_method == "resample") {
       cat("PS weight variable:", wgt, "\n")
     }
@@ -1442,6 +1473,7 @@ DR_att = function(
     f.out = f.out,
     gbm_params = gbm_params,
     bootstrap_method = bootstrap_method,
+    estimator = estimator,
     cross_fitting = cross_fitting,
     k = k,
     stratify_folds = stratify_folds,
@@ -1451,18 +1483,23 @@ DR_att = function(
   )
 
   # Extract point estimates from boot object (t0)
-  aipw_point_att = boot_result$t0[1]
-  drs_point_att = boot_result$t0[2]
+  aipw_point_att = if (estimator %in% c("all", "aipw")) boot_result$t0[1] else NA_real_
+  drs_point_att = if (estimator %in% c("all", "drs")) boot_result$t0[2] else NA_real_
 
   if (verbose) {
     cat("\nPoint Estimates:\n")
-    cat(sprintf("  AIPW ATT: %.4f\n", aipw_point_att))
-    cat(sprintf("  DRS ATT:  %.4f\n\n", drs_point_att))
+    if (estimator %in% c("all", "aipw")) {
+      cat(sprintf("  AIPW ATT: %.4f\n", aipw_point_att))
+    }
+    if (estimator %in% c("all", "drs")) {
+      cat(sprintf("  DRS ATT:  %.4f\n", drs_point_att))
+    }
+    cat("\n")
   }
 
   # Extract bootstrap samples
-  aipw_boots = boot_result$t[, 1]
-  drs_boots = boot_result$t[, 2]
+  aipw_boots = if (estimator %in% c("all", "aipw")) boot_result$t[, 1] else NULL
+  drs_boots = if (estimator %in% c("all", "drs")) boot_result$t[, 2] else NULL
 
   # Extract balance metrics if available
   if (ncol(boot_result$t) >= 5) {
@@ -1476,15 +1513,28 @@ DR_att = function(
   }
 
   # Remove failed iterations
-  n_failed = sum(is.na(aipw_boots))
+  # Determine valid indices based on whichever estimator was computed
+  if (estimator == "aipw") {
+    valid_idx = !is.na(aipw_boots)
+  } else if (estimator == "drs") {
+    valid_idx = !is.na(drs_boots)
+  } else {
+    # For "all", use AIPW to determine valid indices
+    valid_idx = !is.na(aipw_boots)
+  }
+
+  n_failed = sum(!valid_idx)
   if (n_failed > 0 && verbose) {
     cat(sprintf("\nWarning: %d bootstrap iterations failed\n", n_failed))
   }
 
-  # Keep track of valid indices for all metrics
-  valid_idx = !is.na(aipw_boots)
-  aipw_boots = aipw_boots[valid_idx]
-  drs_boots = drs_boots[valid_idx]
+  # Filter valid bootstrap samples
+  if (!is.null(aipw_boots)) {
+    aipw_boots = aipw_boots[valid_idx]
+  }
+  if (!is.null(drs_boots)) {
+    drs_boots = drs_boots[valid_idx]
+  }
 
   # Also filter balance metrics if they exist
   if (!is.null(avg_asd_boots)) {
@@ -1494,25 +1544,33 @@ DR_att = function(
   }
 
   # Compute standard errors
-  aipw_se = sd(aipw_boots)
-  drs_se = sd(drs_boots)
+  aipw_se = if (!is.null(aipw_boots)) sd(aipw_boots) else NA_real_
+  drs_se = if (!is.null(drs_boots)) sd(drs_boots) else NA_real_
 
   # Perform Shapiro-Wilk normality tests
-  aipw_shapiro = tryCatch(
-    shapiro.test(aipw_boots),
-    error = function(e) {
-      warning(sprintf("Shapiro-Wilk test failed for AIPW: %s", e$message))
-      list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
-    }
-  )
+  aipw_shapiro = if (!is.null(aipw_boots)) {
+    tryCatch(
+      shapiro.test(aipw_boots),
+      error = function(e) {
+        warning(sprintf("Shapiro-Wilk test failed for AIPW: %s", e$message))
+        list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
+      }
+    )
+  } else {
+    list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
+  }
 
-  drs_shapiro = tryCatch(
-    shapiro.test(drs_boots),
-    error = function(e) {
-      warning(sprintf("Shapiro-Wilk test failed for DRS: %s", e$message))
-      list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
-    }
-  )
+  drs_shapiro = if (!is.null(drs_boots)) {
+    tryCatch(
+      shapiro.test(drs_boots),
+      error = function(e) {
+        warning(sprintf("Shapiro-Wilk test failed for DRS: %s", e$message))
+        list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
+      }
+    )
+  } else {
+    list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
+  }
 
   # Compute confidence intervals using boot.ci()
   # We need to filter the boot object to remove NA rows
@@ -1528,167 +1586,191 @@ DR_att = function(
   }
 
   # Compute CIs for AIPW (index = 1)
-  aipw_ci = tryCatch(
-    {
-      boot::boot.ci(boot_result_filtered, type = ci_types_to_compute, index = 1)
-    },
-    error = function(e) {
-      warning("boot.ci() failed for AIPW, falling back to manual computation")
-      NULL
-    }
-  )
-
-  # Compute CIs for DRS (index = 2)
-  drs_ci = tryCatch(
-    {
-      boot::boot.ci(boot_result_filtered, type = ci_types_to_compute, index = 2)
-    },
-    error = function(e) {
-      warning("boot.ci() failed for DRS, falling back to manual computation")
-      NULL
-    }
-  )
-
-  # Extract CIs or fall back to manual computation
-  if (!is.null(aipw_ci)) {
-    aipw_ci_normal = if ("normal" %in% names(aipw_ci)) {
-      aipw_ci$normal[2:3]
-    } else {
-      c(aipw_point_att - 1.96 * aipw_se, aipw_point_att + 1.96 * aipw_se)
-    }
-    aipw_ci_basic = if ("basic" %in% names(aipw_ci)) {
-      aipw_ci$basic[4:5]
-    } else {
-      NULL
-    }
-    aipw_ci_percentile = if ("percent" %in% names(aipw_ci)) {
-      aipw_ci$percent[4:5]
-    } else {
-      quantile(aipw_boots, probs = c(0.025, 0.975))
-    }
-  } else {
-    aipw_ci_normal = c(
-      aipw_point_att - 1.96 * aipw_se,
-      aipw_point_att + 1.96 * aipw_se
+  aipw_ci = if (estimator %in% c("all", "aipw")) {
+    tryCatch(
+      {
+        boot::boot.ci(boot_result_filtered, type = ci_types_to_compute, index = 1)
+      },
+      error = function(e) {
+        warning("boot.ci() failed for AIPW, falling back to manual computation")
+        NULL
+      }
     )
-    aipw_ci_basic = NULL
-    aipw_ci_percentile = quantile(aipw_boots, probs = c(0.025, 0.975))
+  } else {
+    NULL
   }
 
-  if (!is.null(drs_ci)) {
-    drs_ci_normal = if ("normal" %in% names(drs_ci)) {
-      drs_ci$normal[2:3]
+  # Compute CIs for DRS (index = 2)
+  drs_ci = if (estimator %in% c("all", "drs")) {
+    tryCatch(
+      {
+        boot::boot.ci(boot_result_filtered, type = ci_types_to_compute, index = 2)
+      },
+      error = function(e) {
+        warning("boot.ci() failed for DRS, falling back to manual computation")
+        NULL
+      }
+    )
+  } else {
+    NULL
+  }
+
+  # Extract CIs or fall back to manual computation
+  if (estimator %in% c("all", "aipw")) {
+    if (!is.null(aipw_ci)) {
+      aipw_ci_normal = if ("normal" %in% names(aipw_ci)) {
+        aipw_ci$normal[2:3]
+      } else {
+        c(aipw_point_att - 1.96 * aipw_se, aipw_point_att + 1.96 * aipw_se)
+      }
+      aipw_ci_basic = if ("basic" %in% names(aipw_ci)) {
+        aipw_ci$basic[4:5]
+      } else {
+        NULL
+      }
+      aipw_ci_percentile = if ("percent" %in% names(aipw_ci)) {
+        aipw_ci$percent[4:5]
+      } else {
+        quantile(aipw_boots, probs = c(0.025, 0.975))
+      }
     } else {
-      c(drs_point_att - 1.96 * drs_se, drs_point_att + 1.96 * drs_se)
-    }
-    drs_ci_basic = if ("basic" %in% names(drs_ci)) drs_ci$basic[4:5] else NULL
-    drs_ci_percentile = if ("percent" %in% names(drs_ci)) {
-      drs_ci$percent[4:5]
-    } else {
-      quantile(drs_boots, probs = c(0.025, 0.975))
+      aipw_ci_normal = c(
+        aipw_point_att - 1.96 * aipw_se,
+        aipw_point_att + 1.96 * aipw_se
+      )
+      aipw_ci_basic = NULL
+      aipw_ci_percentile = quantile(aipw_boots, probs = c(0.025, 0.975))
     }
   } else {
-    drs_ci_normal = c(
-      drs_point_att - 1.96 * drs_se,
-      drs_point_att + 1.96 * drs_se
-    )
+    aipw_ci_normal = NULL
+    aipw_ci_basic = NULL
+    aipw_ci_percentile = NULL
+  }
+
+  if (estimator %in% c("all", "drs")) {
+    if (!is.null(drs_ci)) {
+      drs_ci_normal = if ("normal" %in% names(drs_ci)) {
+        drs_ci$normal[2:3]
+      } else {
+        c(drs_point_att - 1.96 * drs_se, drs_point_att + 1.96 * drs_se)
+      }
+      drs_ci_basic = if ("basic" %in% names(drs_ci)) drs_ci$basic[4:5] else NULL
+      drs_ci_percentile = if ("percent" %in% names(drs_ci)) {
+        drs_ci$percent[4:5]
+      } else {
+        quantile(drs_boots, probs = c(0.025, 0.975))
+      }
+    } else {
+      drs_ci_normal = c(
+        drs_point_att - 1.96 * drs_se,
+        drs_point_att + 1.96 * drs_se
+      )
+      drs_ci_basic = NULL
+      drs_ci_percentile = quantile(drs_boots, probs = c(0.025, 0.975))
+    }
+  } else {
+    drs_ci_normal = NULL
     drs_ci_basic = NULL
-    drs_ci_percentile = quantile(drs_boots, probs = c(0.025, 0.975))
+    drs_ci_percentile = NULL
   }
 
   # Compute p-values using normal approximation
-  aipw_z = aipw_point_att / aipw_se
-  aipw_pval = 2 * pnorm(-abs(aipw_z))
+  aipw_z = if (estimator %in% c("all", "aipw")) aipw_point_att / aipw_se else NA_real_
+  aipw_pval = if (estimator %in% c("all", "aipw")) 2 * pnorm(-abs(aipw_z)) else NA_real_
 
-  drs_z = drs_point_att / drs_se
-  drs_pval = 2 * pnorm(-abs(drs_z))
+  drs_z = if (estimator %in% c("all", "drs")) drs_point_att / drs_se else NA_real_
+  drs_pval = if (estimator %in% c("all", "drs")) 2 * pnorm(-abs(drs_z)) else NA_real_
 
   # Print results
   if (verbose) {
-    cat("\n=== AIPW Results ===\n")
-    cat(sprintf("ATT estimate:     %.4f\n", aipw_point_att))
-    cat(sprintf("Standard error:   %.4f\n", aipw_se))
-    cat(sprintf("p-value:          %.4f\n", aipw_pval))
-    cat("\nConfidence Intervals (95%):\n")
-    if (!is.null(aipw_ci_normal)) {
-      cat(sprintf(
-        "  Normal:      [%.4f, %.4f]\n",
-        aipw_ci_normal[1],
-        aipw_ci_normal[2]
-      ))
-    }
-    if (!is.null(aipw_ci_basic)) {
-      cat(sprintf(
-        "  Basic:       [%.4f, %.4f]\n",
-        aipw_ci_basic[1],
-        aipw_ci_basic[2]
-      ))
-    }
-    if (!is.null(aipw_ci_percentile)) {
-      cat(sprintf(
-        "  Percentile:  [%.4f, %.4f]\n",
-        aipw_ci_percentile[1],
-        aipw_ci_percentile[2]
-      ))
+    if (estimator %in% c("all", "aipw")) {
+      cat("\n=== AIPW Results ===\n")
+      cat(sprintf("ATT estimate:     %.4f\n", aipw_point_att))
+      cat(sprintf("Standard error:   %.4f\n", aipw_se))
+      cat(sprintf("p-value:          %.4f\n", aipw_pval))
+      cat("\nConfidence Intervals (95%):\n")
+      if (!is.null(aipw_ci_normal)) {
+        cat(sprintf(
+          "  Normal:      [%.4f, %.4f]\n",
+          aipw_ci_normal[1],
+          aipw_ci_normal[2]
+        ))
+      }
+      if (!is.null(aipw_ci_basic)) {
+        cat(sprintf(
+          "  Basic:       [%.4f, %.4f]\n",
+          aipw_ci_basic[1],
+          aipw_ci_basic[2]
+        ))
+      }
+      if (!is.null(aipw_ci_percentile)) {
+        cat(sprintf(
+          "  Percentile:  [%.4f, %.4f]\n",
+          aipw_ci_percentile[1],
+          aipw_ci_percentile[2]
+        ))
+      }
+
+      # Display Shapiro-Wilk test results for AIPW
+      cat("\nNormality Test (Shapiro-Wilk):\n")
+      if (!is.na(aipw_shapiro$p.value)) {
+        cat(sprintf(
+          "  W statistic: %.4f\n",
+          aipw_shapiro$statistic
+        ))
+        cat(sprintf(
+          "  p-value:     %.4f %s\n",
+          aipw_shapiro$p.value,
+          ifelse(aipw_shapiro$p.value < 0.05, "(reject normality at 0.05 level)", "(fail to reject normality)")
+        ))
+      } else {
+        cat("  Test failed (likely due to sample size or other issues)\n")
+      }
     }
 
-    # Display Shapiro-Wilk test results for AIPW
-    cat("\nNormality Test (Shapiro-Wilk):\n")
-    if (!is.na(aipw_shapiro$p.value)) {
-      cat(sprintf(
-        "  W statistic: %.4f\n",
-        aipw_shapiro$statistic
-      ))
-      cat(sprintf(
-        "  p-value:     %.4f %s\n",
-        aipw_shapiro$p.value,
-        ifelse(aipw_shapiro$p.value < 0.05, "(reject normality at 0.05 level)", "(fail to reject normality)")
-      ))
-    } else {
-      cat("  Test failed (likely due to sample size or other issues)\n")
-    }
+    if (estimator %in% c("all", "drs")) {
+      cat("\n=== DRS Results ===\n")
+      cat(sprintf("ATT estimate:     %.4f\n", drs_point_att))
+      cat(sprintf("Standard error:   %.4f\n", drs_se))
+      cat(sprintf("p-value:          %.4f\n", drs_pval))
+      cat("\nConfidence Intervals (95%):\n")
+      if (!is.null(drs_ci_normal)) {
+        cat(sprintf(
+          "  Normal:      [%.4f, %.4f]\n",
+          drs_ci_normal[1],
+          drs_ci_normal[2]
+        ))
+      }
+      if (!is.null(drs_ci_basic)) {
+        cat(sprintf(
+          "  Basic:       [%.4f, %.4f]\n",
+          drs_ci_basic[1],
+          drs_ci_basic[2]
+        ))
+      }
+      if (!is.null(drs_ci_percentile)) {
+        cat(sprintf(
+          "  Percentile:  [%.4f, %.4f]\n",
+          drs_ci_percentile[1],
+          drs_ci_percentile[2]
+        ))
+      }
 
-    cat("\n=== DRS Results ===\n")
-    cat(sprintf("ATT estimate:     %.4f\n", drs_point_att))
-    cat(sprintf("Standard error:   %.4f\n", drs_se))
-    cat(sprintf("p-value:          %.4f\n", drs_pval))
-    cat("\nConfidence Intervals (95%):\n")
-    if (!is.null(drs_ci_normal)) {
-      cat(sprintf(
-        "  Normal:      [%.4f, %.4f]\n",
-        drs_ci_normal[1],
-        drs_ci_normal[2]
-      ))
-    }
-    if (!is.null(drs_ci_basic)) {
-      cat(sprintf(
-        "  Basic:       [%.4f, %.4f]\n",
-        drs_ci_basic[1],
-        drs_ci_basic[2]
-      ))
-    }
-    if (!is.null(drs_ci_percentile)) {
-      cat(sprintf(
-        "  Percentile:  [%.4f, %.4f]\n",
-        drs_ci_percentile[1],
-        drs_ci_percentile[2]
-      ))
-    }
-
-    # Display Shapiro-Wilk test results for DRS
-    cat("\nNormality Test (Shapiro-Wilk):\n")
-    if (!is.na(drs_shapiro$p.value)) {
-      cat(sprintf(
-        "  W statistic: %.4f\n",
-        drs_shapiro$statistic
-      ))
-      cat(sprintf(
-        "  p-value:     %.4f %s\n",
-        drs_shapiro$p.value,
-        ifelse(drs_shapiro$p.value < 0.05, "(reject normality at 0.05 level)", "(fail to reject normality)")
-      ))
-    } else {
-      cat("  Test failed (likely due to sample size or other issues)\n")
+      # Display Shapiro-Wilk test results for DRS
+      cat("\nNormality Test (Shapiro-Wilk):\n")
+      if (!is.na(drs_shapiro$p.value)) {
+        cat(sprintf(
+          "  W statistic: %.4f\n",
+          drs_shapiro$statistic
+        ))
+        cat(sprintf(
+          "  p-value:     %.4f %s\n",
+          drs_shapiro$p.value,
+          ifelse(drs_shapiro$p.value < 0.05, "(reject normality at 0.05 level)", "(fail to reject normality)")
+        ))
+      } else {
+        cat("  Test failed (likely due to sample size or other issues)\n")
+      }
     }
 
     # Display balance diagnostics if available
@@ -1749,74 +1831,16 @@ DR_att = function(
   }
 
   # Generate diagnostic plots
-  if (plot_diagnostics) {
-    # Display plots first
-    par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
-
-    # AIPW histogram
-    hist(
-      aipw_boots,
-      main = sprintf(
-        "AIPW Bootstrap Distribution (%s%s)",
-        bootstrap_method,
-        if (cross_fitting) paste0(", CF k=", k) else ""
-      ),
-      xlab = "ATT Estimate",
-      col = "lightblue",
-      border = "white",
-      breaks = 30
-    )
-    abline(v = aipw_point_att, col = "red", lwd = 2, lty = 2)
-
-    # AIPW QQ-plot
-    qqnorm(aipw_boots, main = "AIPW Q-Q Plot")
-    qqline(aipw_boots, col = "red", lwd = 2)
-
-    # DRS histogram
-    hist(
-      drs_boots,
-      main = sprintf(
-        "DRS Bootstrap Distribution (%s%s)",
-        bootstrap_method,
-        if (cross_fitting) paste0(", CF k=", k) else ""
-      ),
-      xlab = "ATT Estimate",
-      col = "lightgreen",
-      border = "white",
-      breaks = 30
-    )
-    abline(v = drs_point_att, col = "red", lwd = 2, lty = 2)
-
-    # DRS QQ-plot
-    qqnorm(drs_boots, main = "DRS Q-Q Plot")
-    qqline(drs_boots, col = "red", lwd = 2)
-
-    par(mfrow = c(1, 1))
-
-    # Save to file if save_to is specified
-    if (!is.null(save_to)) {
-      # Create directory if it doesn't exist
-      if (!dir.exists(save_to)) {
-        dir.create(save_to, recursive = TRUE)
-      }
-
-      # Construct filename
-      filename = sprintf(
-        "DR_bootstrap_%s_vs_%s_%s_%s%s_n%d.png",
-        treated_level,
-        control_level,
-        bootstrap_method,
-        sim,
-        if (cross_fitting) paste0("_CF", k) else "",
-        n_boot
-      )
-      filepath = file.path(save_to, filename)
-
-      # Open high-resolution PNG device for academic paper quality
-      png(filepath, width = 3000, height = 3000, res = 300)
-
+  if (plot_diagnostics && (estimator %in% c("all", "aipw") || estimator %in% c("all", "drs"))) {
+    # Determine plot layout based on estimator
+    if (estimator == "all") {
       par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+    } else {
+      par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+    }
 
+    # AIPW plots
+    if (estimator %in% c("all", "aipw")) {
       # AIPW histogram
       hist(
         aipw_boots,
@@ -1835,7 +1859,10 @@ DR_att = function(
       # AIPW QQ-plot
       qqnorm(aipw_boots, main = "AIPW Q-Q Plot")
       qqline(aipw_boots, col = "red", lwd = 2)
+    }
 
+    # DRS plots
+    if (estimator %in% c("all", "drs")) {
       # DRS histogram
       hist(
         drs_boots,
@@ -1854,6 +1881,83 @@ DR_att = function(
       # DRS QQ-plot
       qqnorm(drs_boots, main = "DRS Q-Q Plot")
       qqline(drs_boots, col = "red", lwd = 2)
+    }
+
+    par(mfrow = c(1, 1))
+
+    # Save to file if save_to is specified
+    if (!is.null(save_to)) {
+      # Create directory if it doesn't exist
+      if (!dir.exists(save_to)) {
+        dir.create(save_to, recursive = TRUE)
+      }
+
+      # Construct filename
+      filename = sprintf(
+        "DR_bootstrap_%s_vs_%s_%s_%s%s%s_n%d.png",
+        treated_level,
+        control_level,
+        bootstrap_method,
+        sim,
+        if (cross_fitting) paste0("_CF", k) else "",
+        if (alpha > 0) paste0("_alpha", alpha) else "",
+        n_boot
+      )
+      filepath = file.path(save_to, filename)
+
+      # Open high-resolution PNG device for academic paper quality
+      png(filepath, width = 3000, height = 3000, res = 300)
+
+      # Determine plot layout based on estimator
+      if (estimator == "all") {
+        par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+      } else {
+        par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+      }
+
+      # AIPW plots
+      if (estimator %in% c("all", "aipw")) {
+        # AIPW histogram
+        hist(
+          aipw_boots,
+          main = sprintf(
+            "AIPW Bootstrap Distribution (%s%s)",
+            bootstrap_method,
+            if (cross_fitting) paste0(", CF k=", k) else ""
+          ),
+          xlab = "ATT Estimate",
+          col = "lightblue",
+          border = "white",
+          breaks = 30
+        )
+        abline(v = aipw_point_att, col = "red", lwd = 2, lty = 2)
+
+        # AIPW QQ-plot
+        qqnorm(aipw_boots, main = "AIPW Q-Q Plot")
+        qqline(aipw_boots, col = "red", lwd = 2)
+      }
+
+      # DRS plots
+      if (estimator %in% c("all", "drs")) {
+        # DRS histogram
+        hist(
+          drs_boots,
+          main = sprintf(
+            "DRS Bootstrap Distribution (%s%s)",
+            bootstrap_method,
+            if (cross_fitting) paste0(", CF k=", k) else ""
+          ),
+          xlab = "ATT Estimate",
+          col = "lightgreen",
+          border = "white",
+          breaks = 30
+        )
+        abline(v = drs_point_att, col = "red", lwd = 2, lty = 2)
+
+        # DRS QQ-plot
+        qqnorm(drs_boots, main = "DRS Q-Q Plot")
+        qqline(drs_boots, col = "red", lwd = 2)
+      }
 
       par(mfrow = c(1, 1))
 
@@ -1899,8 +2003,11 @@ DR_att = function(
   }
 
   # Return results
-  return(list(
-    aipw = list(
+  results = list()
+
+  # Add AIPW results if computed
+  if (estimator %in% c("all", "aipw")) {
+    results$aipw = list(
       att = aipw_point_att,
       se = aipw_se,
       ci_normal = aipw_ci_normal,
@@ -1909,9 +2016,13 @@ DR_att = function(
       pval = aipw_pval,
       bootstrap_samples = aipw_boots,
       boot_ci_object = aipw_ci,
-      shapiro_test = aipw_shapiro  # Add Shapiro-Wilk test results
-    ),
-    drs = list(
+      shapiro_test = aipw_shapiro
+    )
+  }
+
+  # Add DRS results if computed
+  if (estimator %in% c("all", "drs")) {
+    results$drs = list(
       att = drs_point_att,
       se = drs_se,
       ci_normal = drs_ci_normal,
@@ -1920,14 +2031,22 @@ DR_att = function(
       pval = drs_pval,
       bootstrap_samples = drs_boots,
       boot_ci_object = drs_ci,
-      shapiro_test = drs_shapiro  # Add Shapiro-Wilk test results
-    ),
-    n_boot = length(aipw_boots),
-    n_failed = n_failed,
-    balance_diagnostics = balance_diagnostics,
-    bootstrap_balance = bootstrap_balance,
-    boot_object = boot_result # Include boot object for additional analyses
-  ))
+      shapiro_test = drs_shapiro
+    )
+  }
+
+  # Add common results
+  results$n_boot = if (estimator %in% c("all", "aipw")) {
+    length(aipw_boots)
+  } else {
+    length(drs_boots)
+  }
+  results$n_failed = n_failed
+  results$balance_diagnostics = balance_diagnostics
+  results$bootstrap_balance = bootstrap_balance
+  results$boot_object = boot_result
+
+  return(results)
 }
 
 # HELPER X RESULTS ---------------------------------------------------------------------####
