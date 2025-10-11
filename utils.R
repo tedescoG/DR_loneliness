@@ -460,7 +460,7 @@ tune.gbm = function(
 }
 
 # AIPW Estimator -----------------------------------------------------------------------####
-
+# Li et al. 2014, Moodie et al. 2018
 aipw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   #' Compute AIPW estimator for Average Treatment Effect on Treated (ATT)
   #'
@@ -658,6 +658,268 @@ cf_aipw_att = function(
     att = att_est,
     mu_hat_0 = mean(mu_hat_0[Z == 0]),
     mu_hat_1 = mean(Y[Z == 1])
+  ))
+}
+
+## Cross-fitted AIPW (Three-term formula) ---------------------------------------------####
+cf_aipw_att2 = function(
+  outcome,
+  treatment,
+  f.ps,
+  f.out,
+  data,
+  k = 5,
+  stratify = TRUE,
+  gbm_params = list(
+    n.trees = 10000,
+    interaction.depth = 2,
+    shrinkage = 0.01,
+    bag.fraction = 0.5,
+    n.minobsinnode = 10
+  ),
+  seed = 123,
+  verbose = TRUE,
+  alpha = 0
+) {
+  #' Cross-fitted AIPW estimator for ATT (Three-term formulation)
+  #'
+  #' Implements a more complete AIPW estimator with explicit imputation and
+  #' residual correction terms for both treatment groups. The estimator is:
+  #'
+  #' ATT = Term1 + Term2 - Term3, where:
+  #'   Term1 = sum(PS * (Q1 - Q0)) / sum(PS)  [Imputation]
+  #'   Term2 = sum(W * Z * (Y - Q1)) / sum(W * Z)  [Treated residual correction]
+  #'   Term3 = sum(W * (1-Z) * (Y - Q0)) / sum(W * (1-Z))  [Control residual correction]
+  #'
+  #' Key differences from cf_aipw_att2 (Moodie 2018):
+  #' - Fits TWO outcome models: Q1 on treated units, Q0 on control units
+  #' - Uses raw propensity scores in imputation term (not just weights)
+  #' - More symmetric treatment of treated and control groups
+  #' - Explicit three-term structure with both residual corrections
+  #'
+  #' @param outcome character - outcome variable name
+  #' @param treatment character - treatment variable name (binary 0/1)
+  #' @param f.ps formula - propensity score formula
+  #' @param f.out character - outcome model formula (RHS only)
+  #' @param data data.frame - dataset
+  #' @param k integer - number of folds
+  #' @param stratify logical - stratify folds by treatment
+  #' @param gbm_params list - GBM hyperparameters (no internal tuning)
+  #' @param seed integer - random seed
+  #' @param verbose logical - print progress
+  #' @param alpha numeric - propensity score truncation level (0 = no truncation)
+  #'
+  #' @return list with ATT estimate and counterfactual means
+
+  # Extract variables
+  Y = data[[outcome]]
+  Z = data[[treatment]]
+  n = nrow(data)
+  N1 = sum(Z)
+
+  # Create folds
+  stratify_var = if (stratify) treatment else NULL
+  set.seed(seed)
+  folds = vfold_cv(data, v = k, strata = all_of(stratify_var))
+
+  if (verbose) {
+    cat(sprintf("Cross-fitted AIPW (3-term) with %d folds\n", k))
+    if (stratify) cat("Using stratified folding by treatment\n")
+  }
+
+  # Initialize storage for fold-specific predictions and ATT estimates
+  Q1_hat = numeric(n) # Predicted outcomes under treatment
+  Q0_hat = numeric(n) # Predicted outcomes under control
+  ps_values = numeric(n) # Raw propensity scores
+  weights = numeric(n) # ATT weights
+  att_estimates = numeric(k)
+
+  # Cross-fitting loop
+  for (fold in 1:k) {
+    if (verbose) {
+      cat(sprintf("Processing fold %d/%d...\n", fold, k))
+    }
+
+    # Split data: predict on fold k, train on all other folds
+    test_idx = folds$splits[[fold]]$in_id
+    train_idx = setdiff(1:n, test_idx)
+
+    train_data = data[train_idx, ]
+    test_data = data[test_idx, ]
+
+    # Fit propensity score model on K-1 folds
+    set.seed(seed + fold) # Ensure reproducibility across folds
+    ps_fit = do.call(
+      "ps",
+      c(
+        list(
+          formula = f.ps,
+          data = train_data,
+          estimand = "ATT",
+          stop.method = "es.mean",
+          verbose = FALSE
+        ),
+        gbm_params
+      )
+    )
+
+    # Predict propensity scores for held-out fold k
+    ps_pred = predict(
+      ps_fit$gbm.obj,
+      newdata = test_data,
+      n.trees = ps_fit$desc$es.mean$n.trees,
+      type = "response"
+    )
+
+    # Truncate propensity scores if alpha > 0
+    if (alpha > 0) {
+      ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
+    }
+
+    # Store raw propensity scores
+    ps_values[test_idx] = ps_pred
+
+    # Compute IPT weights for held-out fold (ATT weights)
+    weights[test_idx] = ifelse(
+      Z[test_idx] == 1,
+      1,
+      ps_pred / (1 - ps_pred)
+    )
+
+    # Fit TWO outcome models on K-1 folds
+
+    # Model 1: Fit on TREATED units only
+    treated_train = train_data[train_data[[treatment]] == 1, ]
+    mu1_fit = tryCatch(
+      {
+        glm(
+          formula = as.formula(paste(outcome, "~", f.out)),
+          data = treated_train,
+          family = "quasibinomial",
+          control = glm.control(maxit = 50)
+        )
+      },
+      error = function(e) {
+        warning(sprintf("Fold %d: Q1 model failed - %s", fold, e$message))
+        NULL
+      }
+    )
+
+    # Model 2: Fit on CONTROL units only
+    control_train = train_data[train_data[[treatment]] == 0, ]
+    mu0_fit = tryCatch(
+      {
+        glm(
+          formula = as.formula(paste(outcome, "~", f.out)),
+          data = control_train,
+          family = "quasibinomial",
+          control = glm.control(maxit = 50)
+        )
+      },
+      error = function(e) {
+        warning(sprintf("Fold %d: Q0 model failed - %s", fold, e$message))
+        NULL
+      }
+    )
+
+    # Predict both Q1 and Q0 for held-out fold k
+    if (!is.null(mu1_fit)) {
+      Q1_hat[test_idx] = predict(
+        mu1_fit,
+        newdata = test_data,
+        type = "response"
+      )
+    } else {
+      # Fallback: use mean of treated outcomes
+      Q1_hat[test_idx] = mean(train_data[[outcome]][
+        train_data[[treatment]] == 1
+      ])
+    }
+
+    if (!is.null(mu0_fit)) {
+      Q0_hat[test_idx] = predict(
+        mu0_fit,
+        newdata = test_data,
+        type = "response"
+      )
+    } else {
+      # Fallback: use mean of control outcomes
+      Q0_hat[test_idx] = mean(train_data[[outcome]][
+        train_data[[treatment]] == 0
+      ])
+    }
+
+    # Compute fold-specific AIPW estimate using three-term formula
+    Y_k = Y[test_idx]
+    Z_k = Z[test_idx]
+    ps_k = ps_values[test_idx]
+    weights_k = weights[test_idx]
+    Q1_k = Q1_hat[test_idx]
+    Q0_k = Q0_hat[test_idx]
+
+    # Term 1: Weighted imputation
+    # sum(PS * (Q1 - Q0)) / sum(PS)
+    term1 = sum(ps_k * (Q1_k - Q0_k)) / sum(ps_k)
+
+    # Term 2: Treated residual correction
+    # sum(W * Z * (Y - Q1)) / sum(W * Z)
+    # For ATT: W_i = 1 for treated, so weights_k[Z_k==1] are all 1
+    treated_mask = Z_k == 1
+    if (sum(treated_mask) > 0) {
+      term2 = sum(
+        weights_k[treated_mask] * (Y_k[treated_mask] - Q1_k[treated_mask])
+      ) /
+        sum(weights_k[treated_mask])
+    } else {
+      term2 = 0
+      warning(sprintf("Fold %d: No treated units in test fold", fold))
+    }
+
+    # Term 3: Control residual correction
+    # sum(W * (1-Z) * (Y - Q0)) / sum(W * (1-Z))
+    # For ATT: W_i = PS/(1-PS) for control
+    control_mask = Z_k == 0
+    if (sum(control_mask) > 0) {
+      term3 = sum(
+        weights_k[control_mask] * (Y_k[control_mask] - Q0_k[control_mask])
+      ) /
+        sum(weights_k[control_mask])
+    } else {
+      term3 = 0
+      warning(sprintf("Fold %d: No control units in test fold", fold))
+    }
+
+    # Fold-specific ATT estimate: Term 1 + Term 2 - Term 3
+    att_estimates[fold] = term1 + term2 - term3
+
+    if (verbose) {
+      cat(sprintf(
+        "  Fold %d: Term1=%.4f, Term2=%.4f, Term3=%.4f, ATT=%.4f\n",
+        fold,
+        term1,
+        term2,
+        term3,
+        att_estimates[fold]
+      ))
+    }
+  }
+
+  # Average fold-specific ATT estimates for final cross-fitted estimate
+  att_est = mean(att_estimates)
+
+  # Output
+  if (verbose) {
+    cat(sprintf("\nCross-fitted AIPW (3-term) ATT: %.4f\n", att_est))
+    cat(sprintf("Mean Q0 [counterfactual]: %.4f\n", mean(Q0_hat[Z == 1])))
+    cat(sprintf("Mean Q1 [treated outcome]: %.4f\n", mean(Q1_hat[Z == 1])))
+    cat(sprintf("Mean Y(1) [observed]: %.4f\n", mean(Y[Z == 1])))
+  }
+
+  # Return results (same structure as cf_aipw_att2 for compatibility)
+  return(list(
+    att = att_est,
+    mu_hat_0 = mean(Q0_hat[Z == 1]), # Average predicted control outcome for treated
+    mu_hat_1 = mean(Y[Z == 1]) # Observed treated outcome
   ))
 }
 
@@ -1483,8 +1745,16 @@ DR_att = function(
   )
 
   # Extract point estimates from boot object (t0)
-  aipw_point_att = if (estimator %in% c("all", "aipw")) boot_result$t0[1] else NA_real_
-  drs_point_att = if (estimator %in% c("all", "drs")) boot_result$t0[2] else NA_real_
+  aipw_point_att = if (estimator %in% c("all", "aipw")) {
+    boot_result$t0[1]
+  } else {
+    NA_real_
+  }
+  drs_point_att = if (estimator %in% c("all", "drs")) {
+    boot_result$t0[2]
+  } else {
+    NA_real_
+  }
 
   if (verbose) {
     cat("\nPoint Estimates:\n")
@@ -1553,7 +1823,11 @@ DR_att = function(
       shapiro.test(aipw_boots),
       error = function(e) {
         warning(sprintf("Shapiro-Wilk test failed for AIPW: %s", e$message))
-        list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
+        list(
+          statistic = NA,
+          p.value = NA,
+          method = "Shapiro-Wilk normality test"
+        )
       }
     )
   } else {
@@ -1565,7 +1839,11 @@ DR_att = function(
       shapiro.test(drs_boots),
       error = function(e) {
         warning(sprintf("Shapiro-Wilk test failed for DRS: %s", e$message))
-        list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
+        list(
+          statistic = NA,
+          p.value = NA,
+          method = "Shapiro-Wilk normality test"
+        )
       }
     )
   } else {
@@ -1589,7 +1867,11 @@ DR_att = function(
   aipw_ci = if (estimator %in% c("all", "aipw")) {
     tryCatch(
       {
-        boot::boot.ci(boot_result_filtered, type = ci_types_to_compute, index = 1)
+        boot::boot.ci(
+          boot_result_filtered,
+          type = ci_types_to_compute,
+          index = 1
+        )
       },
       error = function(e) {
         warning("boot.ci() failed for AIPW, falling back to manual computation")
@@ -1604,7 +1886,11 @@ DR_att = function(
   drs_ci = if (estimator %in% c("all", "drs")) {
     tryCatch(
       {
-        boot::boot.ci(boot_result_filtered, type = ci_types_to_compute, index = 2)
+        boot::boot.ci(
+          boot_result_filtered,
+          type = ci_types_to_compute,
+          index = 2
+        )
       },
       error = function(e) {
         warning("boot.ci() failed for DRS, falling back to manual computation")
@@ -1675,11 +1961,27 @@ DR_att = function(
   }
 
   # Compute p-values using normal approximation
-  aipw_z = if (estimator %in% c("all", "aipw")) aipw_point_att / aipw_se else NA_real_
-  aipw_pval = if (estimator %in% c("all", "aipw")) 2 * pnorm(-abs(aipw_z)) else NA_real_
+  aipw_z = if (estimator %in% c("all", "aipw")) {
+    aipw_point_att / aipw_se
+  } else {
+    NA_real_
+  }
+  aipw_pval = if (estimator %in% c("all", "aipw")) {
+    2 * pnorm(-abs(aipw_z))
+  } else {
+    NA_real_
+  }
 
-  drs_z = if (estimator %in% c("all", "drs")) drs_point_att / drs_se else NA_real_
-  drs_pval = if (estimator %in% c("all", "drs")) 2 * pnorm(-abs(drs_z)) else NA_real_
+  drs_z = if (estimator %in% c("all", "drs")) {
+    drs_point_att / drs_se
+  } else {
+    NA_real_
+  }
+  drs_pval = if (estimator %in% c("all", "drs")) {
+    2 * pnorm(-abs(drs_z))
+  } else {
+    NA_real_
+  }
 
   # Print results
   if (verbose) {
@@ -1721,7 +2023,11 @@ DR_att = function(
         cat(sprintf(
           "  p-value:     %.4f %s\n",
           aipw_shapiro$p.value,
-          ifelse(aipw_shapiro$p.value < 0.05, "(reject normality at 0.05 level)", "(fail to reject normality)")
+          ifelse(
+            aipw_shapiro$p.value < 0.05,
+            "(reject normality at 0.05 level)",
+            "(fail to reject normality)"
+          )
         ))
       } else {
         cat("  Test failed (likely due to sample size or other issues)\n")
@@ -1766,7 +2072,11 @@ DR_att = function(
         cat(sprintf(
           "  p-value:     %.4f %s\n",
           drs_shapiro$p.value,
-          ifelse(drs_shapiro$p.value < 0.05, "(reject normality at 0.05 level)", "(fail to reject normality)")
+          ifelse(
+            drs_shapiro$p.value < 0.05,
+            "(reject normality at 0.05 level)",
+            "(fail to reject normality)"
+          )
         ))
       } else {
         cat("  Test failed (likely due to sample size or other issues)\n")
@@ -1831,7 +2141,10 @@ DR_att = function(
   }
 
   # Generate diagnostic plots
-  if (plot_diagnostics && (estimator %in% c("all", "aipw") || estimator %in% c("all", "drs"))) {
+  if (
+    plot_diagnostics &&
+      (estimator %in% c("all", "aipw") || estimator %in% c("all", "drs"))
+  ) {
     # Determine plot layout based on estimator
     if (estimator == "all") {
       par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
@@ -2051,7 +2364,13 @@ DR_att = function(
 
 # NEW HELPER FUNCTIONS FOR DEFINITIVE ANALYSIS -----------------------------------------####
 
-build_result_path = function(estimator, comparison, k, model, base = "results/outcome") {
+build_result_path = function(
+  estimator,
+  comparison,
+  k,
+  model,
+  base = "results/outcome"
+) {
   #' Build consistent directory path for analysis results
   #'
   #' @param estimator character - "aipw" or "drs"
@@ -2097,7 +2416,11 @@ build_master_summary = function(results_list, estimator_name, comparison_name) {
     # Extract results for the specified estimator
     est_lower = tolower(estimator_name)
     if (!est_lower %in% names(result)) {
-      warning(sprintf("Estimator '%s' not found in result '%s'", est_lower, result_name))
+      warning(sprintf(
+        "Estimator '%s' not found in result '%s'",
+        est_lower,
+        result_name
+      ))
       next
     }
 
@@ -2119,8 +2442,16 @@ build_master_summary = function(results_list, estimator_name, comparison_name) {
       CI_Perc_Lower = est$ci_percentile[1],
       CI_Perc_Upper = est$ci_percentile[2],
       p_value = est$pval,
-      Shapiro_W = ifelse(!is.null(est$shapiro_test), est$shapiro_test$statistic, NA),
-      Shapiro_p = ifelse(!is.null(est$shapiro_test), est$shapiro_test$p.value, NA),
+      Shapiro_W = ifelse(
+        !is.null(est$shapiro_test),
+        est$shapiro_test$statistic,
+        NA
+      ),
+      Shapiro_p = ifelse(
+        !is.null(est$shapiro_test),
+        est$shapiro_test$p.value,
+        NA
+      ),
       n_boot = result$n_boot,
       n_failed = result$n_failed,
       stringsAsFactors = FALSE
@@ -2281,8 +2612,16 @@ extract_results = function(result, model_num, method, estimator) {
     CI_Perc_Lower = est$ci_percentile[1],
     CI_Perc_Upper = est$ci_percentile[2],
     p_value = est$pval,
-    Shapiro_W = ifelse(!is.null(est$shapiro_test), est$shapiro_test$statistic, NA),
-    Shapiro_p = ifelse(!is.null(est$shapiro_test), est$shapiro_test$p.value, NA),
+    Shapiro_W = ifelse(
+      !is.null(est$shapiro_test),
+      est$shapiro_test$statistic,
+      NA
+    ),
+    Shapiro_p = ifelse(
+      !is.null(est$shapiro_test),
+      est$shapiro_test$p.value,
+      NA
+    ),
     n_boot = result$n_boot,
     n_failed = result$n_failed
   )
