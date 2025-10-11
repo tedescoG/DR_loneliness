@@ -2049,6 +2049,221 @@ DR_att = function(
   return(results)
 }
 
+# NEW HELPER FUNCTIONS FOR DEFINITIVE ANALYSIS -----------------------------------------####
+
+build_result_path = function(estimator, comparison, k, model, base = "results/outcome") {
+  #' Build consistent directory path for analysis results
+  #'
+  #' @param estimator character - "aipw" or "drs"
+  #' @param comparison character - "inc_dec" or "inc_mix"
+  #' @param k integer - number of folds (1 = no cross-fitting)
+  #' @param model integer - model number (1-4)
+  #' @param base character - base directory path
+  #'
+  #' @return character - full path to results directory (created if doesn't exist)
+
+  cf_suffix = if (k == 1) "nocf" else "cf"
+  path = file.path(
+    base,
+    toupper(estimator),
+    comparison,
+    sprintf("k%d_%s", k, cf_suffix),
+    sprintf("model%d", model)
+  )
+  dir.create(path, showWarnings = FALSE, recursive = TRUE)
+  return(path)
+}
+
+build_master_summary = function(results_list, estimator_name, comparison_name) {
+  #' Build comprehensive summary table from multiple analysis results
+  #'
+  #' @param results_list named list - analysis results, names should indicate k and model
+  #' @param estimator_name character - "AIPW" or "DRS"
+  #' @param comparison_name character - "inc_dec" or "inc_mix"
+  #'
+  #' @return data.frame - comprehensive summary with all analyses
+
+  summary_rows = list()
+
+  for (result_name in names(results_list)) {
+    result = results_list[[result_name]]
+
+    # Extract k and model from name (e.g., "k2_model3")
+    parts = strsplit(result_name, "_")[[1]]
+    k_value = as.integer(sub("k", "", parts[1]))
+    model_num = as.integer(sub("model", "", parts[2]))
+    cf_status = if (k_value == 1) "No" else sprintf("Yes (k=%d)", k_value)
+
+    # Extract results for the specified estimator
+    est_lower = tolower(estimator_name)
+    if (!est_lower %in% names(result)) {
+      warning(sprintf("Estimator '%s' not found in result '%s'", est_lower, result_name))
+      next
+    }
+
+    est = result[[est_lower]]
+
+    # Build row
+    row = data.frame(
+      Estimator = estimator_name,
+      Comparison = comparison_name,
+      K_Fold = k_value,
+      Cross_Fitting = cf_status,
+      Model = model_num,
+      ATT = est$att,
+      SE = est$se,
+      CI_Normal_Lower = est$ci_normal[1],
+      CI_Normal_Upper = est$ci_normal[2],
+      CI_Basic_Lower = ifelse(!is.null(est$ci_basic), est$ci_basic[1], NA),
+      CI_Basic_Upper = ifelse(!is.null(est$ci_basic), est$ci_basic[2], NA),
+      CI_Perc_Lower = est$ci_percentile[1],
+      CI_Perc_Upper = est$ci_percentile[2],
+      p_value = est$pval,
+      Shapiro_W = ifelse(!is.null(est$shapiro_test), est$shapiro_test$statistic, NA),
+      Shapiro_p = ifelse(!is.null(est$shapiro_test), est$shapiro_test$p.value, NA),
+      n_boot = result$n_boot,
+      n_failed = result$n_failed,
+      stringsAsFactors = FALSE
+    )
+
+    # Add balance diagnostics if available
+    if (!is.null(result$balance_diagnostics)) {
+      row$Avg_ASD_Mean = result$balance_diagnostics$avg_asd$mean
+      row$Avg_ASD_SD = result$balance_diagnostics$avg_asd$sd
+      row$Max_ASD_Mean = result$balance_diagnostics$max_asd$mean
+      row$Max_ASD_SD = result$balance_diagnostics$max_asd$sd
+      row$ESS_Mean = result$balance_diagnostics$ess$mean
+      row$ESS_SD = result$balance_diagnostics$ess$sd
+    }
+
+    summary_rows[[length(summary_rows) + 1]] = row
+  }
+
+  if (length(summary_rows) == 0) {
+    stop("No valid results found in results_list")
+  }
+
+  summary_df = do.call(rbind, summary_rows)
+  rownames(summary_df) = NULL
+
+  return(summary_df)
+}
+
+plot_kfold_comparison = function(
+  results_k1,
+  results_k2,
+  results_k3,
+  estimator_name,
+  comparison_label,
+  save_path,
+  width = 3000,
+  height = 2000,
+  res = 300
+) {
+  #' Create comparison plot of bootstrap distributions across k-fold values
+  #'
+  #' @param results_k1 list - results for k=1 (model1, model2, model3, model4)
+  #' @param results_k2 list - results for k=2
+  #' @param results_k3 list - results for k=3
+  #' @param estimator_name character - "aipw" or "drs"
+  #' @param comparison_label character - label for plot title
+  #' @param save_path character - path to save PNG file
+  #' @param width numeric - plot width in pixels
+  #' @param height numeric - plot height in pixels
+  #' @param res numeric - resolution in DPI
+  #'
+  #' @return NULL (displays and saves plot)
+
+  est = tolower(estimator_name)
+
+  # Extract bootstrap samples for each k and model
+  all_samples = list(
+    k1 = lapply(results_k1, function(x) x[[est]]$bootstrap_samples),
+    k2 = lapply(results_k2, function(x) x[[est]]$bootstrap_samples),
+    k3 = lapply(results_k3, function(x) x[[est]]$bootstrap_samples)
+  )
+
+  # Extract point estimates
+  all_estimates = list(
+    k1 = sapply(results_k1, function(x) x[[est]]$att),
+    k2 = sapply(results_k2, function(x) x[[est]]$att),
+    k3 = sapply(results_k3, function(x) x[[est]]$att)
+  )
+
+  # Create plot function
+  create_plot = function() {
+    par(mfrow = c(1, 4), mar = c(4, 4, 3, 1))
+
+    colors = c("blue", "red", "darkgreen")
+    k_labels = c("k=1 (No CF)", "k=2", "k=3")
+
+    for (model in 1:4) {
+      # Calculate densities
+      dens_k1 = density(all_samples$k1[[model]])
+      dens_k2 = density(all_samples$k2[[model]])
+      dens_k3 = density(all_samples$k3[[model]])
+
+      # Get x and y limits
+      xlim = range(c(
+        all_samples$k1[[model]],
+        all_samples$k2[[model]],
+        all_samples$k3[[model]]
+      ))
+      ylim = c(0, max(c(dens_k1$y, dens_k2$y, dens_k3$y)) * 1.05)
+
+      # Plot
+      plot(
+        dens_k1,
+        main = sprintf("Model %d\n%s", model, toupper(estimator_name)),
+        xlab = "ATT",
+        ylab = "Density",
+        col = colors[1],
+        lwd = 2,
+        xlim = xlim,
+        ylim = ylim
+      )
+      lines(dens_k2, col = colors[2], lwd = 2)
+      lines(dens_k3, col = colors[3], lwd = 2)
+
+      # Add vertical lines at point estimates
+      abline(v = all_estimates$k1[model], col = colors[1], lty = 2)
+      abline(v = all_estimates$k2[model], col = colors[2], lty = 2)
+      abline(v = all_estimates$k3[model], col = colors[3], lty = 2)
+
+      # Add legend only to first panel
+      if (model == 1) {
+        legend(
+          "topleft",
+          legend = k_labels,
+          col = colors,
+          lwd = 2,
+          cex = 0.7
+        )
+      }
+    }
+
+    # Add overall title
+    mtext(
+      sprintf("%s - %s", comparison_label, toupper(estimator_name)),
+      side = 3,
+      line = -1,
+      outer = TRUE
+    )
+
+    par(mfrow = c(1, 1))
+  }
+
+  # Display plot
+  create_plot()
+
+  # Save to file
+  png(save_path, width = width, height = height, res = res)
+  create_plot()
+  dev.off()
+
+  invisible(NULL)
+}
+
 # HELPER X RESULTS ---------------------------------------------------------------------####
 extract_results = function(result, model_num, method, estimator) {
   est = result[[tolower(estimator)]]
