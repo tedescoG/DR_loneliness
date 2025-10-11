@@ -459,10 +459,10 @@ tune.gbm = function(
   ))
 }
 
-# AIPW Estimator -----------------------------------------------------------------------####
+# DRW Estimator -----------------------------------------------------------------------####
 # Li et al. 2014, Moodie et al. 2018
-aipw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
-  #' Compute AIPW estimator for Average Treatment Effect on Treated (ATT)
+drw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
+  #' Compute DRW estimator for Average Treatment Effect on Treated (ATT)
   #'
   #' @param outcome character - name of outcome variable
   #' @param treatment character - name of treatment variable (must be 0/1)
@@ -490,7 +490,7 @@ aipw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   # Predict mu0 for all observations
   mu_hat_0 = predict(mu0, newdata = data, type = "response")
 
-  # Moodie (2018) AIPW ATT estimator
+  # Moodie (2018) drw ATT estimator
   att_est = (1 / N1) *
     sum(
       (Z - (1 - Z) * weights) * (Y - mu_hat_0)
@@ -498,7 +498,7 @@ aipw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
 
   # output
   if (verbose) {
-    cat(sprintf("ATT estimate (AIPW): %.4f\n", att_est))
+    cat(sprintf("ATT estimate (DRW): %.4f\n", att_est))
     cat(sprintf("Mean Y(0) [counterfactual]: %.4f\n", mu_hat_0))
   }
 
@@ -510,8 +510,8 @@ aipw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   ))
 }
 
-## Cross-fitted AIPW -------------------------------------------------------------------####
-cf_aipw_att = function(
+## Cross-fitted DRW -------------------------------------------------------------------####
+cf_drw_att = function(
   outcome,
   treatment,
   f.ps,
@@ -530,7 +530,7 @@ cf_aipw_att = function(
   verbose = TRUE,
   alpha = 0
 ) {
-  #' Cross-fitted AIPW estimator for ATT
+  #' Cross-fitted DRW estimator for ATT
   #'
   #' @param outcome character - outcome variable name
   #' @param treatment character - treatment variable name (binary 0/1)
@@ -558,7 +558,7 @@ cf_aipw_att = function(
   folds = vfold_cv(data, v = k, strata = all_of(stratify_var))
 
   if (verbose) {
-    cat(sprintf("Cross-fitted AIPW with %d folds\n", k))
+    cat(sprintf("Cross-fitted DRW with %d folds\n", k))
     if (stratify) cat("Using stratified folding by treatment\n")
   }
 
@@ -632,7 +632,7 @@ cf_aipw_att = function(
       type = "response"
     )
 
-    # Compute fold-specific AIPW estimate using only fold k data
+    # Compute fold-specific DRW estimate using only fold k data
     Y_k = Y[test_idx]
     Z_k = Z[test_idx]
     weights_k = weights[test_idx]
@@ -648,12 +648,12 @@ cf_aipw_att = function(
 
   # Output
   if (verbose) {
-    cat(sprintf("\nCross-fitted AIPW ATT: %.4f\n", att_est))
+    cat(sprintf("\nCross-fitted DRW ATT: %.4f\n", att_est))
     cat(sprintf("Mean Y(0) [counterfactual]: %.4f\n", mean(mu_hat_0[Z == 0])))
     cat(sprintf("Mean Y(1) [observed]: %.4f\n", mean(Y[Z == 1])))
   }
 
-  # Return results (same structure as aipw_att for compatibility)
+  # Return results (same structure as drw_att for compatibility)
   return(list(
     att = att_est,
     mu_hat_0 = mean(mu_hat_0[Z == 0]),
@@ -662,7 +662,7 @@ cf_aipw_att = function(
 }
 
 ## Cross-fitted AIPW (Three-term formula) ---------------------------------------------####
-cf_aipw_att2 = function(
+cf_aipw_att = function(
   outcome,
   treatment,
   f.ps,
@@ -691,7 +691,7 @@ cf_aipw_att2 = function(
   #'   Term2 = sum(W * Z * (Y - Q1)) / sum(W * Z)  [Treated residual correction]
   #'   Term3 = sum(W * (1-Z) * (Y - Q0)) / sum(W * (1-Z))  [Control residual correction]
   #'
-  #' Key differences from cf_aipw_att2 (Moodie 2018):
+  #' Key differences from Moodie 2018:
   #' - Fits TWO outcome models: Q1 on treated units, Q0 on control units
   #' - Uses raw propensity scores in imputation term (not just weights)
   #' - More symmetric treatment of treated and control groups
@@ -723,7 +723,7 @@ cf_aipw_att2 = function(
   folds = vfold_cv(data, v = k, strata = all_of(stratify_var))
 
   if (verbose) {
-    cat(sprintf("Cross-fitted AIPW (3-term) with %d folds\n", k))
+    cat(sprintf("Cross-fitted AIPW with %d folds\n", k))
     if (stratify) cat("Using stratified folding by treatment\n")
   }
 
@@ -909,13 +909,13 @@ cf_aipw_att2 = function(
 
   # Output
   if (verbose) {
-    cat(sprintf("\nCross-fitted AIPW (3-term) ATT: %.4f\n", att_est))
+    cat(sprintf("\nCross-fitted AIPW ATT: %.4f\n", att_est))
     cat(sprintf("Mean Q0 [counterfactual]: %.4f\n", mean(Q0_hat[Z == 1])))
     cat(sprintf("Mean Q1 [treated outcome]: %.4f\n", mean(Q1_hat[Z == 1])))
     cat(sprintf("Mean Y(1) [observed]: %.4f\n", mean(Y[Z == 1])))
   }
 
-  # Return results (same structure as cf_aipw_att2 for compatibility)
+  # Return results (same structure as cf_drw_att for compatibility)
   return(list(
     att = att_est,
     mu_hat_0 = mean(Q0_hat[Z == 1]), # Average predicted control outcome for treated
@@ -1181,7 +1181,7 @@ boot_iter = function(
   f.out,
   gbm_params = NULL,
   bootstrap_method = c("resample", "reweight"),
-  estimator = c("all", "aipw", "drs"),
+  estimator = c("all", "drw", "drs"),
   cross_fitting = FALSE,
   k = 5,
   stratify_folds = TRUE,
@@ -1203,7 +1203,7 @@ boot_iter = function(
   #' @param f.out character - outcome model formula (RHS only)
   #' @param gbm_params list - GBM parameters for ps() function (for reweight method)
   #' @param bootstrap_method character - "resample" (use existing weights) or "reweight" (re-estimate PS)
-  #' @param estimator character - which estimator to compute: "all" (both), "aipw", or "drs"
+  #' @param estimator character - which estimator to compute: "all" (both), "drw", or "drs"
   #' @param cross_fitting logical - use cross-fitting or not
   #' @param k integer - number of cross-fitting folds
   #' @param stratify_folds logical - stratify folds by treatment (for cross-fitting)
@@ -1211,7 +1211,7 @@ boot_iter = function(
   #' @param seed_offset integer - base seed for reproducibility
   #' @param alpha numeric - propensity score truncation level (0 = no truncation)
   #'
-  #' @return numeric vector: c(aipw, drs, avg_asd, max_asd, ess) - uncomputed estimators are NA
+  #' @return numeric vector: c(drw, drs, avg_asd, max_asd, ess) - uncomputed estimators are NA
 
   # Wrap entire function in tryCatch for error handling
   tryCatch(
@@ -1221,7 +1221,7 @@ boot_iter = function(
       estimator = match.arg(estimator)
 
       # Determine which estimators to compute
-      compute_aipw = estimator %in% c("all", "aipw")
+      compute_drw = estimator %in% c("all", "drw")
       compute_drs = estimator %in% c("all", "drs")
 
       # Resample data
@@ -1233,7 +1233,7 @@ boot_iter = function(
       )
 
       # Initialize estimates and weights
-      aipw_est = NA_real_
+      drw_est = NA_real_
       drs_est = NA_real_
       weights_vec = NULL
 
@@ -1242,8 +1242,8 @@ boot_iter = function(
 
         if (bootstrap_method == "resample") {
           # Use existing weights from data
-          if (compute_aipw) {
-            aipw_result = aipw_att(
+          if (compute_drw) {
+            drw_result = drw_att(
               outcome = outcome,
               treatment = treatment,
               f.out = f.out,
@@ -1286,8 +1286,8 @@ boot_iter = function(
           boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
 
           # Compute estimates
-          if (compute_aipw) {
-            aipw_result = aipw_att(
+          if (compute_drw) {
+            drw_result = drw_att(
               outcome = outcome,
               treatment = treatment,
               f.out = f.out,
@@ -1311,7 +1311,7 @@ boot_iter = function(
           weights_vec = boot_data$ps_wgt
         }
 
-        aipw_est = if (compute_aipw) aipw_result$att else NA_real_
+        drw_est = if (compute_drw) drw_result$att else NA_real_
         drs_est = if (compute_drs) drs_result$att else NA_real_
       } else {
         # ========== CROSS-FITTED ESTIMATION ==========
@@ -1334,7 +1334,7 @@ boot_iter = function(
         # Initialize storage for fold-specific estimates
         mu_hat_0 = numeric(n)
         weights = numeric(n)
-        aipw_fold_estimates = numeric(k)
+        drw_fold_estimates = numeric(k)
         drs_fold_estimates = numeric(k)
 
         # Cross-fitting loop
@@ -1398,15 +1398,15 @@ boot_iter = function(
             type = "response"
           )
 
-          # Compute fold-specific AIPW estimate
-          if (compute_aipw) {
+          # Compute fold-specific drw estimate
+          if (compute_drw) {
             Y_k = Y[test_idx]
             Z_k = Z[test_idx]
             weights_k = weights[test_idx]
             mu_hat_0_k = mu_hat_0[test_idx]
             N1_k = sum(Z_k)
 
-            aipw_fold_estimates[fold] = (1 / N1_k) *
+            drw_fold_estimates[fold] = (1 / N1_k) *
               sum((Z_k - (1 - Z_k) * weights_k) * (Y_k - mu_hat_0_k))
           }
 
@@ -1441,8 +1441,8 @@ boot_iter = function(
             counterfactual_k = treated_k
             counterfactual_k[[treatment]] = 0
 
-            # Extract Y_k and Z_k if not already done for AIPW
-            if (!compute_aipw) {
+            # Extract Y_k and Z_k if not already done for DRW
+            if (!compute_drw) {
               Y_k = Y[test_idx]
               Z_k = Z[test_idx]
             }
@@ -1460,7 +1460,7 @@ boot_iter = function(
         }
 
         # Average across folds for final bootstrap estimates
-        aipw_est = if (compute_aipw) mean(aipw_fold_estimates) else NA_real_
+        drw_est = if (compute_drw) mean(drw_fold_estimates) else NA_real_
         drs_est = if (compute_drs) mean(drs_fold_estimates) else NA_real_
 
         # Use full sample weights for balance diagnostics
@@ -1524,7 +1524,7 @@ boot_iter = function(
 
       # Return results
       return(c(
-        aipw = aipw_est,
+        drw = drw_est,
         drs = drs_est,
         avg_asd = avg_asd,
         max_asd = max_asd,
@@ -1534,7 +1534,7 @@ boot_iter = function(
     error = function(e) {
       # Return NAs if anything fails during bootstrap iteration
       return(c(
-        aipw = NA_real_,
+        drw = NA_real_,
         drs = NA_real_,
         avg_asd = NA_real_,
         max_asd = NA_real_,
@@ -1563,7 +1563,7 @@ DR_att = function(
     n.minobsinnode = 10
   ),
   bootstrap_method = c("resample", "reweight"),
-  estimator = c("all", "aipw", "drs"),
+  estimator = c("all", "drw", "drs"),
   stratified = TRUE,
   wgt = "iptw",
   cross_fitting = FALSE,
@@ -1587,7 +1587,7 @@ DR_att = function(
   #' - Simulation schemes: ordinary or balanced bootstrap
   #' - Cross-fitting: TRUE or FALSE
   #' - Confidence intervals: normal, basic, percentile (no BCa)
-  #' - Estimator selection: both, AIPW only, or DRS only
+  #' - Estimator selection: both, DRW only, or DRS only
   #'
   #' @param outcome character - name of outcome variable
   #' @param treatment character - name of treatment variable
@@ -1598,7 +1598,7 @@ DR_att = function(
   #' @param data data.frame - dataset (must contain wgt if bootstrap_method = "resample")
   #' @param gbm_params list - GBM parameters for ps() function
   #' @param bootstrap_method character - "resample" (faster) or "reweight" (more conservative)
-  #' @param estimator character - which estimator to run: "all" (both, default), "aipw", or "drs"
+  #' @param estimator character - which estimator to run: "all" (both, default), "drw", or "drs"
   #' @param stratified logical - use stratified bootstrap to maintain treatment/control proportions
   #' @param wgt character - name of propensity score weight column in data (for resample method)
   #' @param cross_fitting logical - use cross-fitting to reduce overfitting bias
@@ -1745,7 +1745,7 @@ DR_att = function(
   )
 
   # Extract point estimates from boot object (t0)
-  aipw_point_att = if (estimator %in% c("all", "aipw")) {
+  drw_point_att = if (estimator %in% c("all", "drw")) {
     boot_result$t0[1]
   } else {
     NA_real_
@@ -1758,8 +1758,8 @@ DR_att = function(
 
   if (verbose) {
     cat("\nPoint Estimates:\n")
-    if (estimator %in% c("all", "aipw")) {
-      cat(sprintf("  AIPW ATT: %.4f\n", aipw_point_att))
+    if (estimator %in% c("all", "drw")) {
+      cat(sprintf("  DRW ATT: %.4f\n", drw_point_att))
     }
     if (estimator %in% c("all", "drs")) {
       cat(sprintf("  DRS ATT:  %.4f\n", drs_point_att))
@@ -1768,7 +1768,7 @@ DR_att = function(
   }
 
   # Extract bootstrap samples
-  aipw_boots = if (estimator %in% c("all", "aipw")) boot_result$t[, 1] else NULL
+  drw_boots = if (estimator %in% c("all", "drw")) boot_result$t[, 1] else NULL
   drs_boots = if (estimator %in% c("all", "drs")) boot_result$t[, 2] else NULL
 
   # Extract balance metrics if available
@@ -1784,13 +1784,13 @@ DR_att = function(
 
   # Remove failed iterations
   # Determine valid indices based on whichever estimator was computed
-  if (estimator == "aipw") {
-    valid_idx = !is.na(aipw_boots)
+  if (estimator == "drw") {
+    valid_idx = !is.na(drw_boots)
   } else if (estimator == "drs") {
     valid_idx = !is.na(drs_boots)
   } else {
-    # For "all", use AIPW to determine valid indices
-    valid_idx = !is.na(aipw_boots)
+    # For "all", use DRW to determine valid indices
+    valid_idx = !is.na(drw_boots)
   }
 
   n_failed = sum(!valid_idx)
@@ -1799,8 +1799,8 @@ DR_att = function(
   }
 
   # Filter valid bootstrap samples
-  if (!is.null(aipw_boots)) {
-    aipw_boots = aipw_boots[valid_idx]
+  if (!is.null(drw_boots)) {
+    drw_boots = drw_boots[valid_idx]
   }
   if (!is.null(drs_boots)) {
     drs_boots = drs_boots[valid_idx]
@@ -1814,15 +1814,15 @@ DR_att = function(
   }
 
   # Compute standard errors
-  aipw_se = if (!is.null(aipw_boots)) sd(aipw_boots) else NA_real_
+  drw_se = if (!is.null(drw_boots)) sd(drw_boots) else NA_real_
   drs_se = if (!is.null(drs_boots)) sd(drs_boots) else NA_real_
 
   # Perform Shapiro-Wilk normality tests
-  aipw_shapiro = if (!is.null(aipw_boots)) {
+  drw_shapiro = if (!is.null(drw_boots)) {
     tryCatch(
-      shapiro.test(aipw_boots),
+      shapiro.test(drw_boots),
       error = function(e) {
-        warning(sprintf("Shapiro-Wilk test failed for AIPW: %s", e$message))
+        warning(sprintf("Shapiro-Wilk test failed for DRW: %s", e$message))
         list(
           statistic = NA,
           p.value = NA,
@@ -1863,8 +1863,8 @@ DR_att = function(
     ci_types_to_compute = ci_type
   }
 
-  # Compute CIs for AIPW (index = 1)
-  aipw_ci = if (estimator %in% c("all", "aipw")) {
+  # Compute CIs for DRW (index = 1)
+  drw_ci = if (estimator %in% c("all", "drw")) {
     tryCatch(
       {
         boot::boot.ci(
@@ -1874,7 +1874,7 @@ DR_att = function(
         )
       },
       error = function(e) {
-        warning("boot.ci() failed for AIPW, falling back to manual computation")
+        warning("boot.ci() failed for DRW, falling back to manual computation")
         NULL
       }
     )
@@ -1902,35 +1902,35 @@ DR_att = function(
   }
 
   # Extract CIs or fall back to manual computation
-  if (estimator %in% c("all", "aipw")) {
-    if (!is.null(aipw_ci)) {
-      aipw_ci_normal = if ("normal" %in% names(aipw_ci)) {
-        aipw_ci$normal[2:3]
+  if (estimator %in% c("all", "drw")) {
+    if (!is.null(drw_ci)) {
+      drw_ci_normal = if ("normal" %in% names(drw_ci)) {
+        drw_ci$normal[2:3]
       } else {
-        c(aipw_point_att - 1.96 * aipw_se, aipw_point_att + 1.96 * aipw_se)
+        c(drw_point_att - 1.96 * drw_se, drw_point_att + 1.96 * drw_se)
       }
-      aipw_ci_basic = if ("basic" %in% names(aipw_ci)) {
-        aipw_ci$basic[4:5]
+      drw_ci_basic = if ("basic" %in% names(drw_ci)) {
+        drw_ci$basic[4:5]
       } else {
         NULL
       }
-      aipw_ci_percentile = if ("percent" %in% names(aipw_ci)) {
-        aipw_ci$percent[4:5]
+      drw_ci_percentile = if ("percent" %in% names(drw_ci)) {
+        drw_ci$percent[4:5]
       } else {
-        quantile(aipw_boots, probs = c(0.025, 0.975))
+        quantile(drw_boots, probs = c(0.025, 0.975))
       }
     } else {
-      aipw_ci_normal = c(
-        aipw_point_att - 1.96 * aipw_se,
-        aipw_point_att + 1.96 * aipw_se
+      drw_ci_normal = c(
+        drw_point_att - 1.96 * drw_se,
+        drw_point_att + 1.96 * drw_se
       )
-      aipw_ci_basic = NULL
-      aipw_ci_percentile = quantile(aipw_boots, probs = c(0.025, 0.975))
+      drw_ci_basic = NULL
+      drw_ci_percentile = quantile(drw_boots, probs = c(0.025, 0.975))
     }
   } else {
-    aipw_ci_normal = NULL
-    aipw_ci_basic = NULL
-    aipw_ci_percentile = NULL
+    drw_ci_normal = NULL
+    drw_ci_basic = NULL
+    drw_ci_percentile = NULL
   }
 
   if (estimator %in% c("all", "drs")) {
@@ -1961,13 +1961,13 @@ DR_att = function(
   }
 
   # Compute p-values using normal approximation
-  aipw_z = if (estimator %in% c("all", "aipw")) {
-    aipw_point_att / aipw_se
+  drw_z = if (estimator %in% c("all", "drw")) {
+    drw_point_att / drw_se
   } else {
     NA_real_
   }
-  aipw_pval = if (estimator %in% c("all", "aipw")) {
-    2 * pnorm(-abs(aipw_z))
+  drw_pval = if (estimator %in% c("all", "drw")) {
+    2 * pnorm(-abs(drw_z))
   } else {
     NA_real_
   }
@@ -1985,46 +1985,46 @@ DR_att = function(
 
   # Print results
   if (verbose) {
-    if (estimator %in% c("all", "aipw")) {
-      cat("\n=== AIPW Results ===\n")
-      cat(sprintf("ATT estimate:     %.4f\n", aipw_point_att))
-      cat(sprintf("Standard error:   %.4f\n", aipw_se))
-      cat(sprintf("p-value:          %.4f\n", aipw_pval))
+    if (estimator %in% c("all", "drw")) {
+      cat("\n=== DRW Results ===\n")
+      cat(sprintf("ATT estimate:     %.4f\n", drw_point_att))
+      cat(sprintf("Standard error:   %.4f\n", drw_se))
+      cat(sprintf("p-value:          %.4f\n", drw_pval))
       cat("\nConfidence Intervals (95%):\n")
-      if (!is.null(aipw_ci_normal)) {
+      if (!is.null(drw_ci_normal)) {
         cat(sprintf(
           "  Normal:      [%.4f, %.4f]\n",
-          aipw_ci_normal[1],
-          aipw_ci_normal[2]
+          drw_ci_normal[1],
+          drw_ci_normal[2]
         ))
       }
-      if (!is.null(aipw_ci_basic)) {
+      if (!is.null(drw_ci_basic)) {
         cat(sprintf(
           "  Basic:       [%.4f, %.4f]\n",
-          aipw_ci_basic[1],
-          aipw_ci_basic[2]
+          drw_ci_basic[1],
+          drw_ci_basic[2]
         ))
       }
-      if (!is.null(aipw_ci_percentile)) {
+      if (!is.null(drw_ci_percentile)) {
         cat(sprintf(
           "  Percentile:  [%.4f, %.4f]\n",
-          aipw_ci_percentile[1],
-          aipw_ci_percentile[2]
+          drw_ci_percentile[1],
+          drw_ci_percentile[2]
         ))
       }
 
-      # Display Shapiro-Wilk test results for AIPW
+      # Display Shapiro-Wilk test results for DRW
       cat("\nNormality Test (Shapiro-Wilk):\n")
-      if (!is.na(aipw_shapiro$p.value)) {
+      if (!is.na(drw_shapiro$p.value)) {
         cat(sprintf(
           "  W statistic: %.4f\n",
-          aipw_shapiro$statistic
+          drw_shapiro$statistic
         ))
         cat(sprintf(
           "  p-value:     %.4f %s\n",
-          aipw_shapiro$p.value,
+          drw_shapiro$p.value,
           ifelse(
-            aipw_shapiro$p.value < 0.05,
+            drw_shapiro$p.value < 0.05,
             "(reject normality at 0.05 level)",
             "(fail to reject normality)"
           )
@@ -2143,7 +2143,7 @@ DR_att = function(
   # Generate diagnostic plots
   if (
     plot_diagnostics &&
-      (estimator %in% c("all", "aipw") || estimator %in% c("all", "drs"))
+      (estimator %in% c("all", "drw") || estimator %in% c("all", "drs"))
   ) {
     # Determine plot layout based on estimator
     if (estimator == "all") {
@@ -2152,13 +2152,13 @@ DR_att = function(
       par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
     }
 
-    # AIPW plots
-    if (estimator %in% c("all", "aipw")) {
-      # AIPW histogram
+    # DRW plots
+    if (estimator %in% c("all", "drw")) {
+      # DRW histogram
       hist(
-        aipw_boots,
+        drw_boots,
         main = sprintf(
-          "AIPW Bootstrap Distribution (%s%s)",
+          "DRW Bootstrap Distribution (%s%s)",
           bootstrap_method,
           if (cross_fitting) paste0(", CF k=", k) else ""
         ),
@@ -2167,11 +2167,11 @@ DR_att = function(
         border = "white",
         breaks = 30
       )
-      abline(v = aipw_point_att, col = "red", lwd = 2, lty = 2)
+      abline(v = drw_point_att, col = "red", lwd = 2, lty = 2)
 
-      # AIPW QQ-plot
-      qqnorm(aipw_boots, main = "AIPW Q-Q Plot")
-      qqline(aipw_boots, col = "red", lwd = 2)
+      # DRW QQ-plot
+      qqnorm(drw_boots, main = "DRW Q-Q Plot")
+      qqline(drw_boots, col = "red", lwd = 2)
     }
 
     # DRS plots
@@ -2228,13 +2228,13 @@ DR_att = function(
         par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
       }
 
-      # AIPW plots
-      if (estimator %in% c("all", "aipw")) {
-        # AIPW histogram
+      # DRW plots
+      if (estimator %in% c("all", "drw")) {
+        # DRW histogram
         hist(
-          aipw_boots,
+          drw_boots,
           main = sprintf(
-            "AIPW Bootstrap Distribution (%s%s)",
+            "DRW Bootstrap Distribution (%s%s)",
             bootstrap_method,
             if (cross_fitting) paste0(", CF k=", k) else ""
           ),
@@ -2243,11 +2243,11 @@ DR_att = function(
           border = "white",
           breaks = 30
         )
-        abline(v = aipw_point_att, col = "red", lwd = 2, lty = 2)
+        abline(v = drw_point_att, col = "red", lwd = 2, lty = 2)
 
-        # AIPW QQ-plot
-        qqnorm(aipw_boots, main = "AIPW Q-Q Plot")
-        qqline(aipw_boots, col = "red", lwd = 2)
+        # DRW QQ-plot
+        qqnorm(drw_boots, main = "DRW Q-Q Plot")
+        qqline(drw_boots, col = "red", lwd = 2)
       }
 
       # DRS plots
@@ -2318,18 +2318,18 @@ DR_att = function(
   # Return results
   results = list()
 
-  # Add AIPW results if computed
-  if (estimator %in% c("all", "aipw")) {
-    results$aipw = list(
-      att = aipw_point_att,
-      se = aipw_se,
-      ci_normal = aipw_ci_normal,
-      ci_basic = aipw_ci_basic,
-      ci_percentile = aipw_ci_percentile,
-      pval = aipw_pval,
-      bootstrap_samples = aipw_boots,
-      boot_ci_object = aipw_ci,
-      shapiro_test = aipw_shapiro
+  # Add DRW results if computed
+  if (estimator %in% c("all", "drw")) {
+    results$drw = list(
+      att = drw_point_att,
+      se = drw_se,
+      ci_normal = drw_ci_normal,
+      ci_basic = drw_ci_basic,
+      ci_percentile = drw_ci_percentile,
+      pval = drw_pval,
+      bootstrap_samples = drw_boots,
+      boot_ci_object = drw_ci,
+      shapiro_test = drw_shapiro
     )
   }
 
@@ -2349,8 +2349,8 @@ DR_att = function(
   }
 
   # Add common results
-  results$n_boot = if (estimator %in% c("all", "aipw")) {
-    length(aipw_boots)
+  results$n_boot = if (estimator %in% c("all", "drw")) {
+    length(drw_boots)
   } else {
     length(drs_boots)
   }
@@ -2373,7 +2373,7 @@ build_result_path = function(
 ) {
   #' Build consistent directory path for analysis results
   #'
-  #' @param estimator character - "aipw" or "drs"
+  #' @param estimator character - "drw" or "drs"
   #' @param comparison character - "inc_dec" or "inc_mix"
   #' @param k integer - number of folds (1 = no cross-fitting)
   #' @param model integer - model number (1-4)
@@ -2397,7 +2397,7 @@ build_master_summary = function(results_list, estimator_name, comparison_name) {
   #' Build comprehensive summary table from multiple analysis results
   #'
   #' @param results_list named list - analysis results, names should indicate k and model
-  #' @param estimator_name character - "AIPW" or "DRS"
+  #' @param estimator_name character - "DRW" or "DRS"
   #' @param comparison_name character - "inc_dec" or "inc_mix"
   #'
   #' @return data.frame - comprehensive summary with all analyses
@@ -2496,7 +2496,7 @@ plot_kfold_comparison = function(
   #' @param results_k1 list - results for k=1 (model1, model2, model3, model4)
   #' @param results_k2 list - results for k=2
   #' @param results_k3 list - results for k=3
-  #' @param estimator_name character - "aipw" or "drs"
+  #' @param estimator_name character - "drw" or "drs"
   #' @param comparison_label character - label for plot title
   #' @param save_path character - path to save PNG file
   #' @param width numeric - plot width in pixels
@@ -2653,15 +2653,15 @@ plot_model_comparison = function(
   res = 300,
   colors = c("blue", "red", "green", "purple"),
   ylim_padding = 1.05,
-  aipw_title = "AIPW: Reweight Method",
+  drw_title = "DRW: Reweight Method",
   drs_title = "DRS: Reweight Method"
 ) {
   #' Plot Model Comparison Distributions
   #'
   #' Creates a comparison plot of bootstrap distributions for multiple models,
-  #' showing both AIPW and DRS methods side by side. Displays the plot and saves to file.
+  #' showing both DRW and DRS methods side by side. Displays the plot and saves to file.
   #'
-  #' @param results A list of model results, each containing `aipw` and `drs`
+  #' @param results A list of model results, each containing `drw` and `drs`
   #'   components with `bootstrap_samples`
   #' @param save_path Path where the plot should be saved (PNG format)
   #' @param width Plot width in pixels (default: 3000)
@@ -2669,7 +2669,7 @@ plot_model_comparison = function(
   #' @param res Resolution in DPI (default: 300)
   #' @param colors Vector of colors for each model (default: blue, red, green, purple)
   #' @param ylim_padding Padding factor for y-axis limit (default: 1.05 for 5% padding)
-  #' @param aipw_title Title for AIPW panel (default: "AIPW: Reweight Method")
+  #' @param drw_title Title for DRW panel (default: "DRW: Reweight Method")
   #' @param drs_title Title for DRS panel (default: "DRS: Reweight Method")
   #'
   #' @return NULL (displays plot and saves to file)
@@ -2683,21 +2683,21 @@ plot_model_comparison = function(
     colors = rep(colors, length.out = n_models)
   }
 
-  # === AIPW Panel ===
+  # === DRW Panel ===
 
-  # Extract all AIPW bootstrap samples
-  aipw_samples = lapply(results, function(x) {
-    x$aipw$bootstrap_samples
+  # Extract all DRW bootstrap samples
+  drw_samples = lapply(results, function(x) {
+    x$drw$bootstrap_samples
   })
 
   # Calculate densities
-  aipw_densities = lapply(aipw_samples, density)
+  drw_densities = lapply(drw_samples, density)
 
   # Calculate y-axis limit
-  aipw_ylim = max(sapply(aipw_densities, function(d) max(d$y)))
+  drw_ylim = max(sapply(drw_densities, function(d) max(d$y)))
 
   # Calculate x-axis limit
-  aipw_xlim = range(unlist(aipw_samples))
+  drw_xlim = range(unlist(drw_samples))
 
   # === DRS Panel ===
 
@@ -2719,20 +2719,20 @@ plot_model_comparison = function(
   create_plot = function() {
     par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
 
-    # AIPW plot
+    # DRW plot
     plot(
-      aipw_densities[[1]],
-      main = aipw_title,
+      drw_densities[[1]],
+      main = drw_title,
       xlab = "ATT",
       col = colors[1],
       lwd = 2,
-      xlim = aipw_xlim,
-      ylim = c(0, aipw_ylim * ylim_padding)
+      xlim = drw_xlim,
+      ylim = c(0, drw_ylim * ylim_padding)
     )
 
     if (n_models > 1) {
       for (i in 2:n_models) {
-        lines(aipw_densities[[i]], col = colors[i], lwd = 2)
+        lines(drw_densities[[i]], col = colors[i], lwd = 2)
       }
     }
 
@@ -2794,11 +2794,11 @@ plot_bootstrap_histograms = function(
   #' Plot Bootstrap Distribution Histograms for All Models
   #'
   #' Creates a 2x4 grid of histograms showing bootstrap distributions for
-  #' DRS (top row) and AIPW (bottom row) across 4 models.
+  #' DRS (top row) and DRW (bottom row) across 4 models.
   #' Each histogram shows the distribution with a vertical red dashed line at the point estimate.
   #'
   #' @param results A list of model results (model1_reweight, model2_reweight, etc.),
-  #'   each containing `aipw` and `drs` components with `bootstrap_samples` and `att`
+  #'   each containing `drw` and `drs` components with `bootstrap_samples` and `att`
   #' @param save_path Path where the plot should be saved (PNG format)
   #' @param width Plot width in pixels (default: 3000)
   #' @param height Plot height in pixels (default: 2000)
@@ -2834,21 +2834,21 @@ plot_bootstrap_histograms = function(
       abline(v = drs_estimate, col = "red", lwd = 2, lty = 2)
     }
 
-    # Bottom row: AIPW
+    # Bottom row: DRW
     for (i in 1:4) {
-      aipw_samples = results[[i]]$aipw$bootstrap_samples
-      aipw_estimate = results[[i]]$aipw$att
+      drw_samples = results[[i]]$drw$bootstrap_samples
+      drw_estimate = results[[i]]$drw$att
 
       hist(
-        aipw_samples,
+        drw_samples,
         breaks = ncol_breaks,
         col = "lightblue",
         border = "black",
-        main = paste0("AIPW Model ", i),
+        main = paste0("DRW Model ", i),
         xlab = "ATT",
         ylab = "Frequency"
       )
-      abline(v = aipw_estimate, col = "red", lwd = 2, lty = 2)
+      abline(v = drw_estimate, col = "red", lwd = 2, lty = 2)
     }
 
     par(mfrow = c(1, 1))
