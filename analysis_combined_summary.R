@@ -91,6 +91,7 @@ plot_estimator_comparison = function(
   comparison_label,
   k_label,
   save_path,
+  aggregation = "mean",
   width = 3000,
   height = 2000,
   res = 300
@@ -99,13 +100,26 @@ plot_estimator_comparison = function(
   #'
   #' Creates a 2x4 plot: rows are estimators, columns are models
 
+  # Helper function to extract data from potentially nested structure
+  extract_data = function(x, estimator, field) {
+    est_data = x[[estimator]]
+    # Check if nested structure (aggregation="all" was used)
+    if (!is.null(est_data$mean) && !is.null(est_data$median)) {
+      # Nested: use specified aggregation
+      return(est_data[[aggregation]][[field]])
+    } else {
+      # Flat: use direct access
+      return(est_data[[field]])
+    }
+  }
+
   # Extract bootstrap samples
-  drw_samples = lapply(drw_results, function(x) x$drw$bootstrap_samples)
-  drs_samples = lapply(drs_results, function(x) x$drs$bootstrap_samples)
+  drw_samples = lapply(drw_results, function(x) extract_data(x, "drw", "bootstrap_samples"))
+  drs_samples = lapply(drs_results, function(x) extract_data(x, "drs", "bootstrap_samples"))
 
   # Extract point estimates
-  drw_estimates = sapply(drw_results, function(x) x$drw$att)
-  drs_estimates = sapply(drs_results, function(x) x$drs$att)
+  drw_estimates = sapply(drw_results, function(x) extract_data(x, "drw", "att"))
+  drs_estimates = sapply(drs_results, function(x) extract_data(x, "drs", "att"))
 
   # Create plot function
   create_plot = function() {

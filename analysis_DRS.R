@@ -139,7 +139,8 @@ for (k in k_values) {
       ci_type = ci_type,
       sim = sim,
       save_to = result_path,
-      alpha = alpha
+      alpha = alpha,
+      aggregation = "all"
     )
 
     # Store result with informative name
@@ -316,7 +317,8 @@ for (k in k_values) {
       ci_type = ci_type,
       sim = sim,
       save_to = result_path,
-      alpha = alpha
+      alpha = alpha,
+      aggregation = "all"
     )
 
     # Store result with informative name
