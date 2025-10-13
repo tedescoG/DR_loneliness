@@ -574,8 +574,8 @@ cf_drw_att = function(
     }
 
     # Split data: predict on fold k, train on all other folds
-    test_idx = folds$splits[[fold]]$in_id
-    train_idx = setdiff(1:n, test_idx)
+    train_idx = folds$splits[[fold]]$in_id
+    test_idx = setdiff(1:n, train_idx)
 
     train_data = data[train_idx, ]
     test_data = data[test_idx, ]
@@ -741,8 +741,8 @@ cf_aipw_att = function(
     }
 
     # Split data: predict on fold k, train on all other folds
-    test_idx = folds$splits[[fold]]$in_id
-    train_idx = setdiff(1:n, test_idx)
+    train_idx = folds$splits[[fold]]$in_id
+    test_idx = setdiff(1:n, train_idx)
 
     train_data = data[train_idx, ]
     test_data = data[test_idx, ]
@@ -1067,8 +1067,8 @@ cf_drs_att = function(
     }
 
     # Split data
-    test_idx = folds$splits[[fold]]$in_id
-    train_idx = setdiff(1:n, test_idx)
+    train_idx = folds$splits[[fold]]$in_id
+    test_idx = setdiff(1:n, train_idx)
 
     train_data = data[train_idx, ]
     test_data = data[test_idx, ]
@@ -1340,8 +1340,8 @@ boot_iter = function(
         # Cross-fitting loop
         for (fold in 1:k) {
           # Split data: predict on fold k, train on K-1 folds
-          test_idx = folds$splits[[fold]]$in_id
-          train_idx = setdiff(1:n, test_idx)
+          train_idx = folds$splits[[fold]]$in_id
+          test_idx = setdiff(1:n, train_idx)
 
           train_data = boot_data[train_idx, ]
           test_data = boot_data[test_idx, ]
