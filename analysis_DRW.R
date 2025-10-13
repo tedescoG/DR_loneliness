@@ -30,7 +30,7 @@ ci_type = "all"
 alpha = 0 # NO truncation
 
 # Cross-fitting values
-k_values = c(1, 2, 3) # k=1 means cross_fitting=FALSE
+k_values = c(1, 2, 3, 5) # k=1 means cross_fitting=FALSE
 
 # Propensity score formula (same for both comparisons)
 ps_formula = as.formula(
