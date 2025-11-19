@@ -459,543 +459,9 @@ tune.gbm = function(
   ))
 }
 
-# DRW Estimator -----------------------------------------------------------------------####
-# Li et al. 2014, Moodie et al. 2018
-drw_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
-  #' Compute DRW estimator for Average Treatment Effect on Treated (ATT)
-  #'
-  #' @param outcome character - name of outcome variable
-  #' @param treatment character - name of treatment variable (must be 0/1)
-  #' @param f.out character - outcome model formula (RHS only)
-  #' @param wgt character - name of weight variable (propensity scores)
-  #' @param data data.frame - dataset containing all variables
-  #' @param verbose logical - whether to print results
-  #'
-  #' @return list with ATT estimate and counterfactual means
-  # Extract variables
-  Y = data %>% pull(all_of(outcome))
-  Z = data %>% pull(all_of(treatment))
-  weights = data %>% pull(all_of(wgt))
-  N1 = sum(Z)
 
-  # Fit outcome model mu0 on control units only
-  control_data = data %>% filter(Z == 0)
-  mu0 = glm(
-    formula = as.formula(paste(outcome, "~", f.out)),
-    data = control_data,
-    family = "quasibinomial",
-    control = glm.control(maxit = 50) # avoid convergence problems
-  )
 
-  # Predict mu0 for all observations
-  mu_hat_0 = predict(mu0, newdata = data, type = "response")
 
-  # Moodie (2018) drw ATT estimator
-  att_est = (1 / N1) *
-    sum(
-      (Z - (1 - Z) * weights) * (Y - mu_hat_0)
-    )
-
-  # output
-  if (verbose) {
-    cat(sprintf("ATT estimate (DRW): %.4f\n", att_est))
-    cat(sprintf("Mean Y(0) [counterfactual]: %.4f\n", mu_hat_0))
-  }
-
-  # Return results
-  return(list(
-    att = att_est,
-    mu_hat_0 = mu_hat_0,
-    mu_hat_1 = mean(Y[Z == 1])
-  ))
-}
-
-## Cross-fitted DRW -------------------------------------------------------------------####
-cf_drw_att = function(
-  outcome,
-  treatment,
-  f.ps,
-  f.out,
-  data,
-  k = 5,
-  stratify = TRUE,
-  gbm_params = list(
-    n.trees = 10000,
-    interaction.depth = 2,
-    shrinkage = 0.01,
-    bag.fraction = 0.5,
-    n.minobsinnode = 10
-  ),
-  seed = 123,
-  verbose = TRUE,
-  alpha = 0,
-  aggregation = c("mean", "median", "all")
-) {
-  #' Cross-fitted DRW estimator for ATT
-  #'
-  #' @param outcome character - outcome variable name
-  #' @param treatment character - treatment variable name (binary 0/1)
-  #' @param f.ps formula - propensity score formula
-  #' @param f.out character - outcome model formula (RHS only)
-  #' @param data data.frame - dataset
-  #' @param k integer - number of folds
-  #' @param stratify logical - stratify folds by treatment
-  #' @param gbm_params list - GBM hyperparameters (no internal tuning)
-  #' @param seed integer - random seed
-  #' @param verbose logical - print progress
-  #' @param alpha numeric - propensity score truncation level (0 = no truncation)
-  #' @param aggregation character - how to aggregate fold estimates: "mean" (default), "median", or "all" (both)
-  #'
-  #' @return list with ATT estimate and counterfactual means
-
-  # Match arguments
-  aggregation = match.arg(aggregation)
-
-  # Extract variables
-  Y = data[[outcome]]
-  Z = data[[treatment]]
-  n = nrow(data)
-  N1 = sum(Z)
-
-  # Create folds
-  stratify_var = if (stratify) treatment else NULL
-  set.seed(seed)
-  folds = vfold_cv(data, v = k, strata = all_of(stratify_var))
-
-  if (verbose) {
-    cat(sprintf("Cross-fitted DRW with %d folds\n", k))
-    if (stratify) cat("Using stratified folding by treatment\n")
-  }
-
-  # Initialize storage for fold-specific predictions and ATT estimates
-  mu_hat_0 = numeric(n)
-  weights = numeric(n)
-  att_estimates = numeric(k)
-
-  # Cross-fitting loop
-  for (fold in 1:k) {
-    if (verbose) {
-      cat(sprintf("Processing fold %d/%d...\n", fold, k))
-    }
-
-    # Split data: predict on fold k, train on all other folds
-    train_idx = folds$splits[[fold]]$in_id
-    test_idx = setdiff(1:n, train_idx)
-
-    train_data = data[train_idx, ]
-    test_data = data[test_idx, ]
-
-    # Fit propensity score model on K-1 folds
-    set.seed(seed + fold) # Ensure reproducibility across folds
-    ps_fit = do.call(
-      "ps",
-      c(
-        list(
-          formula = f.ps,
-          data = train_data,
-          estimand = "ATT",
-          stop.method = "es.mean",
-          verbose = FALSE
-        ),
-        gbm_params
-      )
-    )
-
-    # Predict propensity scores for held-out fold k
-    ps_pred = predict(
-      ps_fit$gbm.obj,
-      newdata = test_data,
-      n.trees = ps_fit$desc$es.mean$n.trees,
-      type = "response"
-    )
-
-    # Truncate propensity scores if alpha > 0
-    if (alpha > 0) {
-      ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
-    }
-
-    # Compute IPT weights for held-out fold (ATT weights)
-    weights[test_idx] = ifelse(
-      Z[test_idx] == 1,
-      1,
-      ps_pred / (1 - ps_pred)
-    )
-
-    # Fit outcome model on control units from K-1 folds
-    control_train = train_data[train_data[[treatment]] == 0, ]
-    mu0_fit = glm(
-      formula = as.formula(paste(outcome, "~", f.out)),
-      data = control_train,
-      family = "quasibinomial",
-      control = glm.control(maxit = 50)
-    )
-
-    # Predict counterfactual outcomes for held-out fold k
-    mu_hat_0[test_idx] = predict(
-      mu0_fit,
-      newdata = test_data,
-      type = "response"
-    )
-
-    # Compute fold-specific DRW estimate using only fold k data
-    Y_k = Y[test_idx]
-    Z_k = Z[test_idx]
-    weights_k = weights[test_idx]
-    mu_hat_0_k = mu_hat_0[test_idx]
-    N1_k = sum(Z_k)
-
-    att_estimates[fold] = (1 / N1_k) *
-      sum((Z_k - (1 - Z_k) * weights_k) * (Y_k - mu_hat_0_k))
-  }
-
-  # Aggregate fold-specific ATT estimates based on aggregation method
-  if (aggregation == "mean") {
-    att_est = mean(att_estimates)
-  } else if (aggregation == "median") {
-    att_est = median(att_estimates)
-  } else {
-    # aggregation == "all"
-    att_est_mean = mean(att_estimates)
-    att_est_median = median(att_estimates)
-  }
-
-  # Output
-  if (verbose) {
-    if (aggregation %in% c("mean", "median")) {
-      cat(sprintf(
-        "\nCross-fitted DRW ATT (%s): %.4f\n",
-        aggregation,
-        att_est
-      ))
-    } else {
-      cat(sprintf(
-        "\nCross-fitted DRW ATT (mean): %.4f\n",
-        att_est_mean
-      ))
-      cat(sprintf(
-        "Cross-fitted DRW ATT (median): %.4f\n",
-        att_est_median
-      ))
-    }
-    cat(sprintf("Mean Y(0) [counterfactual]: %.4f\n", mean(mu_hat_0[Z == 0])))
-    cat(sprintf("Mean Y(1) [observed]: %.4f\n", mean(Y[Z == 1])))
-  }
-
-  # Return results (maintain backward compatibility)
-  if (aggregation == "all") {
-    return(list(
-      att_mean = att_est_mean,
-      att_median = att_est_median,
-      mu_hat_0 = mean(mu_hat_0[Z == 0]),
-      mu_hat_1 = mean(Y[Z == 1])
-    ))
-  } else {
-    return(list(
-      att = att_est,
-      mu_hat_0 = mean(mu_hat_0[Z == 0]),
-      mu_hat_1 = mean(Y[Z == 1])
-    ))
-  }
-}
-
-## Cross-fitted AIPW (Three-term formula) ---------------------------------------------####
-cf_aipw_att = function(
-  outcome,
-  treatment,
-  f.ps,
-  f.out,
-  data,
-  k = 5,
-  stratify = TRUE,
-  gbm_params = list(
-    n.trees = 10000,
-    interaction.depth = 2,
-    shrinkage = 0.01,
-    bag.fraction = 0.5,
-    n.minobsinnode = 10
-  ),
-  seed = 123,
-  verbose = TRUE,
-  alpha = 0,
-  aggregation = c("mean", "median", "all")
-) {
-  #' Cross-fitted AIPW estimator for ATT (Three-term formulation)
-  #'
-  #' Implements a more complete AIPW estimator with explicit imputation and
-  #' residual correction terms for both treatment groups. The estimator is:
-  #'
-  #' ATT = Term1 + Term2 - Term3, where:
-  #'   Term1 = sum(PS * (Q1 - Q0)) / sum(PS)  [Imputation]
-  #'   Term2 = sum(W * Z * (Y - Q1)) / sum(W * Z)  [Treated residual correction]
-  #'   Term3 = sum(W * (1-Z) * (Y - Q0)) / sum(W * (1-Z))  [Control residual correction]
-  #'
-  #' Key differences from Moodie 2018:
-  #' - Fits TWO outcome models: Q1 on treated units, Q0 on control units
-  #' - Uses raw propensity scores in imputation term (not just weights)
-  #' - More symmetric treatment of treated and control groups
-  #' - Explicit three-term structure with both residual corrections
-  #'
-  #' @param outcome character - outcome variable name
-  #' @param treatment character - treatment variable name (binary 0/1)
-  #' @param f.ps formula - propensity score formula
-  #' @param f.out character - outcome model formula (RHS only)
-  #' @param data data.frame - dataset
-  #' @param k integer - number of folds
-  #' @param stratify logical - stratify folds by treatment
-  #' @param gbm_params list - GBM hyperparameters (no internal tuning)
-  #' @param seed integer - random seed
-  #' @param verbose logical - print progress
-  #' @param alpha numeric - propensity score truncation level (0 = no truncation)
-  #' @param aggregation character - how to aggregate fold estimates: "mean" (default), "median", or "all" (both)
-  #'
-  #' @return list with ATT estimate and counterfactual means
-
-  # Match arguments
-  aggregation = match.arg(aggregation)
-
-  # Extract variables
-  Y = data[[outcome]]
-  Z = data[[treatment]]
-  n = nrow(data)
-  N1 = sum(Z)
-
-  # Create folds
-  stratify_var = if (stratify) treatment else NULL
-  set.seed(seed)
-  folds = vfold_cv(data, v = k, strata = all_of(stratify_var))
-
-  if (verbose) {
-    cat(sprintf("Cross-fitted AIPW with %d folds\n", k))
-    if (stratify) cat("Using stratified folding by treatment\n")
-  }
-
-  # Initialize storage for fold-specific predictions and ATT estimates
-  Q1_hat = numeric(n) # Predicted outcomes under treatment
-  Q0_hat = numeric(n) # Predicted outcomes under control
-  ps_values = numeric(n) # Raw propensity scores
-  weights = numeric(n) # ATT weights
-  att_estimates = numeric(k)
-
-  # Cross-fitting loop
-  for (fold in 1:k) {
-    if (verbose) {
-      cat(sprintf("Processing fold %d/%d...\n", fold, k))
-    }
-
-    # Split data: predict on fold k, train on all other folds
-    train_idx = folds$splits[[fold]]$in_id
-    test_idx = setdiff(1:n, train_idx)
-
-    train_data = data[train_idx, ]
-    test_data = data[test_idx, ]
-
-    # Fit propensity score model on K-1 folds
-    set.seed(seed + fold) # Ensure reproducibility across folds
-    ps_fit = do.call(
-      "ps",
-      c(
-        list(
-          formula = f.ps,
-          data = train_data,
-          estimand = "ATT",
-          stop.method = "es.mean",
-          verbose = FALSE
-        ),
-        gbm_params
-      )
-    )
-
-    # Predict propensity scores for held-out fold k
-    ps_pred = predict(
-      ps_fit$gbm.obj,
-      newdata = test_data,
-      n.trees = ps_fit$desc$es.mean$n.trees,
-      type = "response"
-    )
-
-    # Truncate propensity scores if alpha > 0
-    if (alpha > 0) {
-      ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
-    }
-
-    # Store raw propensity scores
-    ps_values[test_idx] = ps_pred
-
-    # Compute IPT weights for held-out fold (ATT weights)
-    weights[test_idx] = ifelse(
-      Z[test_idx] == 1,
-      1,
-      ps_pred / (1 - ps_pred)
-    )
-
-    # Fit TWO outcome models on K-1 folds
-
-    # Model 1: Fit on TREATED units only
-    treated_train = train_data[train_data[[treatment]] == 1, ]
-    mu1_fit = tryCatch(
-      {
-        glm(
-          formula = as.formula(paste(outcome, "~", f.out)),
-          data = treated_train,
-          family = "quasibinomial",
-          control = glm.control(maxit = 50)
-        )
-      },
-      error = function(e) {
-        warning(sprintf("Fold %d: Q1 model failed - %s", fold, e$message))
-        NULL
-      }
-    )
-
-    # Model 2: Fit on CONTROL units only
-    control_train = train_data[train_data[[treatment]] == 0, ]
-    mu0_fit = tryCatch(
-      {
-        glm(
-          formula = as.formula(paste(outcome, "~", f.out)),
-          data = control_train,
-          family = "quasibinomial",
-          control = glm.control(maxit = 50)
-        )
-      },
-      error = function(e) {
-        warning(sprintf("Fold %d: Q0 model failed - %s", fold, e$message))
-        NULL
-      }
-    )
-
-    # Predict both Q1 and Q0 for held-out fold k
-    if (!is.null(mu1_fit)) {
-      Q1_hat[test_idx] = predict(
-        mu1_fit,
-        newdata = test_data,
-        type = "response"
-      )
-    } else {
-      # Fallback: use mean of treated outcomes
-      Q1_hat[test_idx] = mean(train_data[[outcome]][
-        train_data[[treatment]] == 1
-      ])
-    }
-
-    if (!is.null(mu0_fit)) {
-      Q0_hat[test_idx] = predict(
-        mu0_fit,
-        newdata = test_data,
-        type = "response"
-      )
-    } else {
-      # Fallback: use mean of control outcomes
-      Q0_hat[test_idx] = mean(train_data[[outcome]][
-        train_data[[treatment]] == 0
-      ])
-    }
-
-    # Compute fold-specific AIPW estimate using three-term formula
-    Y_k = Y[test_idx]
-    Z_k = Z[test_idx]
-    ps_k = ps_values[test_idx]
-    weights_k = weights[test_idx]
-    Q1_k = Q1_hat[test_idx]
-    Q0_k = Q0_hat[test_idx]
-
-    # Term 1: Weighted imputation
-    # sum(PS * (Q1 - Q0)) / sum(PS)
-    term1 = sum(ps_k * (Q1_k - Q0_k)) / sum(ps_k)
-
-    # Term 2: Treated residual correction
-    # sum(W * Z * (Y - Q1)) / sum(W * Z)
-    # For ATT: W_i = 1 for treated, so weights_k[Z_k==1] are all 1
-    treated_mask = Z_k == 1
-    if (sum(treated_mask) > 0) {
-      term2 = sum(
-        weights_k[treated_mask] * (Y_k[treated_mask] - Q1_k[treated_mask])
-      ) /
-        sum(weights_k[treated_mask])
-    } else {
-      term2 = 0
-      warning(sprintf("Fold %d: No treated units in test fold", fold))
-    }
-
-    # Term 3: Control residual correction
-    # sum(W * (1-Z) * (Y - Q0)) / sum(W * (1-Z))
-    # For ATT: W_i = PS/(1-PS) for control
-    control_mask = Z_k == 0
-    if (sum(control_mask) > 0) {
-      term3 = sum(
-        weights_k[control_mask] * (Y_k[control_mask] - Q0_k[control_mask])
-      ) /
-        sum(weights_k[control_mask])
-    } else {
-      term3 = 0
-      warning(sprintf("Fold %d: No control units in test fold", fold))
-    }
-
-    # Fold-specific ATT estimate: Term 1 + Term 2 - Term 3
-    att_estimates[fold] = term1 + term2 - term3
-
-    if (verbose) {
-      cat(sprintf(
-        "  Fold %d: Term1=%.4f, Term2=%.4f, Term3=%.4f, ATT=%.4f\n",
-        fold,
-        term1,
-        term2,
-        term3,
-        att_estimates[fold]
-      ))
-    }
-  }
-
-  # Aggregate fold-specific ATT estimates based on aggregation method
-  if (aggregation == "mean") {
-    att_est = mean(att_estimates)
-  } else if (aggregation == "median") {
-    att_est = median(att_estimates)
-  } else {
-    # aggregation == "all"
-    att_est_mean = mean(att_estimates)
-    att_est_median = median(att_estimates)
-  }
-
-  # Output
-  if (verbose) {
-    if (aggregation %in% c("mean", "median")) {
-      cat(sprintf(
-        "\nCross-fitted AIPW ATT (%s): %.4f\n",
-        aggregation,
-        att_est
-      ))
-    } else {
-      cat(sprintf(
-        "\nCross-fitted AIPW ATT (mean): %.4f\n",
-        att_est_mean
-      ))
-      cat(sprintf(
-        "Cross-fitted AIPW ATT (median): %.4f\n",
-        att_est_median
-      ))
-    }
-    cat(sprintf("Mean Q0 [counterfactual]: %.4f\n", mean(Q0_hat[Z == 1])))
-    cat(sprintf("Mean Q1 [treated outcome]: %.4f\n", mean(Q1_hat[Z == 1])))
-    cat(sprintf("Mean Y(1) [observed]: %.4f\n", mean(Y[Z == 1])))
-  }
-
-  # Return results (maintain backward compatibility)
-  if (aggregation == "all") {
-    return(list(
-      att_mean = att_est_mean,
-      att_median = att_est_median,
-      mu_hat_0 = mean(Q0_hat[Z == 1]), # Average predicted control outcome for treated
-      mu_hat_1 = mean(Y[Z == 1]) # Observed treated outcome
-    ))
-  } else {
-    return(list(
-      att = att_est,
-      mu_hat_0 = mean(Q0_hat[Z == 1]), # Average predicted control outcome for treated
-      mu_hat_1 = mean(Y[Z == 1]) # Observed treated outcome
-    ))
-  }
-}
 
 # DRS Estimator -----------------------------------------------------------------------####
 drs_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
@@ -1065,217 +531,6 @@ drs_att = function(outcome, treatment, f.out, wgt, data, verbose = T) {
   ))
 }
 
-## Cross-fitted DRS -------------------------------------------------------------------####
-cf_drs_att = function(
-  outcome,
-  treatment,
-  f.ps,
-  f.out,
-  data,
-  k = 5,
-  stratify = TRUE,
-  gbm_params = list(
-    n.trees = 10000,
-    interaction.depth = 2,
-    shrinkage = 0.01,
-    bag.fraction = 0.5,
-    n.minobsinnode = 10
-  ),
-  seed = 123,
-  verbose = TRUE,
-  alpha = 0,
-  aggregation = c("mean", "median", "all")
-) {
-  #' Cross-fitted DRS (Doubly Robust Standardization) ATT estimator
-  #'
-  #' Implements K-fold cross-fitting for DRS estimation to reduce overfitting bias
-  #' when using flexible machine learning methods (GBM) for propensity scores.
-  #'
-  #' @param outcome character - name of outcome variable
-  #' @param treatment character - name of treatment variable (must be 0/1 numeric)
-  #' @param f.ps formula - propensity score model formula
-  #' @param f.out character - outcome model formula (RHS only, excluding outcome and treatment)
-  #' @param data data.frame - dataset (treatment should already be 0/1 numeric)
-  #' @param k integer - number of cross-fitting folds
-  #' @param stratify logical - stratify folds by treatment status
-  #' @param gbm_params list - GBM parameters for ps() function
-  #' @param seed integer - random seed for fold creation
-  #' @param verbose logical - print progress and results
-  #' @param alpha numeric - propensity score truncation level (0 = no truncation)
-  #' @param aggregation character - how to aggregate fold estimates: "mean" (default), "median", or "all" (both)
-  #'
-  #' @return list with att estimate and fold-specific estimates
-
-  # Match arguments
-  aggregation = match.arg(aggregation)
-
-  if (verbose) {
-    cat("=== Cross-Fitted DRS ATT Estimation ===\n")
-    cat(sprintf("K-fold cross-fitting: k=%d\n", k))
-    cat(sprintf("Stratified folds: %s\n\n", stratify))
-  }
-
-  n = nrow(data)
-
-  # Extract outcome and treatment
-  Y = data[[outcome]]
-  Z = data[[treatment]]
-
-  # Verify treatment is 0/1
-  if (!all(Z %in% c(0, 1))) {
-    stop("Treatment variable must be 0/1 numeric")
-  }
-
-  # Create K folds
-  stratify_var = if (stratify) treatment else NULL
-  set.seed(seed)
-  folds = vfold_cv(data, v = k, strata = all_of(stratify_var))
-
-  # Initialize storage
-  weights = numeric(n)
-  drs_fold_estimates = numeric(k)
-
-  if (verbose) {
-    cat("Processing folds:\n")
-  }
-
-  # Cross-fitting loop
-  for (fold in 1:k) {
-    if (verbose) {
-      cat(sprintf("  Fold %d/%d...\n", fold, k))
-    }
-
-    # Split data
-    train_idx = folds$splits[[fold]]$in_id
-    test_idx = setdiff(1:n, train_idx)
-
-    train_data = data[train_idx, ]
-    test_data = data[test_idx, ]
-
-    # Fit propensity score model on K-1 folds
-    set.seed(seed + fold)
-    ps_fit = do.call(
-      "ps",
-      c(
-        list(
-          formula = f.ps,
-          data = train_data,
-          estimand = "ATT",
-          stop.method = "es.mean",
-          verbose = FALSE
-        ),
-        gbm_params
-      )
-    )
-
-    # Predict propensity scores for held-out fold
-    ps_pred = predict(
-      ps_fit$gbm.obj,
-      newdata = test_data,
-      n.trees = ps_fit$desc$es.mean$n.trees,
-      type = "response"
-    )
-
-    # Truncate propensity scores if alpha > 0
-    if (alpha > 0) {
-      ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
-    }
-
-    # Compute ATT weights for held-out fold
-    weights[test_idx] = ifelse(
-      Z[test_idx] == 1,
-      1,
-      ps_pred / (1 - ps_pred)
-    )
-
-    # DRS estimation on held-out fold
-    test_data_wgt = test_data
-    test_data_wgt$ps_wgt = weights[test_idx]
-
-    weighted_design = svydesign(
-      ids = ~1,
-      weights = ~ps_wgt,
-      data = test_data_wgt
-    )
-
-    # Build outcome model formula
-    if (f.out != "1") {
-      formula_str = paste(outcome, "~", treatment, "+", f.out)
-    } else {
-      formula_str = paste(outcome, "~", treatment)
-    }
-
-    # Fit weighted outcome model on held-out fold
-    fit = svyglm(
-      formula = as.formula(formula_str),
-      family = 'quasibinomial',
-      design = weighted_design
-    )
-
-    # Extract fold-specific outcomes
-    Y_k = Y[test_idx]
-    Z_k = Z[test_idx]
-
-    # Predict counterfactuals for treated units in fold
-    treated_k = test_data_wgt[test_data_wgt[[treatment]] == 1, ]
-    counterfactual_k = treated_k
-    counterfactual_k[[treatment]] = 0
-
-    mu0_k = predict(fit, newdata = counterfactual_k, type = "response")
-    mu_hat_0_k = mean(mu0_k)
-    mu_hat_1_k = mean(Y_k[Z_k == 1])
-
-    # Fold-specific ATT
-    drs_fold_estimates[fold] = mu_hat_1_k - mu_hat_0_k
-
-    if (verbose) {
-      cat(sprintf("    Fold %d ATT: %.4f\n", fold, drs_fold_estimates[fold]))
-    }
-  }
-
-  # Aggregate fold-specific ATT estimates based on aggregation method
-  if (aggregation == "mean") {
-    att_est = mean(drs_fold_estimates)
-  } else if (aggregation == "median") {
-    att_est = median(drs_fold_estimates)
-  } else {
-    # aggregation == "all"
-    att_est_mean = mean(drs_fold_estimates)
-    att_est_median = median(drs_fold_estimates)
-  }
-
-  if (verbose) {
-    if (aggregation %in% c("mean", "median")) {
-      cat(sprintf(
-        "\nCross-fitted DRS ATT (%s): %.4f\n",
-        aggregation,
-        att_est
-      ))
-    } else {
-      cat(sprintf(
-        "\nCross-fitted DRS ATT (mean): %.4f\n",
-        att_est_mean
-      ))
-      cat(sprintf(
-        "Cross-fitted DRS ATT (median): %.4f\n",
-        att_est_median
-      ))
-    }
-  }
-
-  # Return results (maintain backward compatibility)
-  if (aggregation == "all") {
-    return(list(
-      att_mean = att_est_mean,
-      att_median = att_est_median
-    ))
-  } else {
-    return(list(
-      att = att_est
-    ))
-  }
-}
-
 
 # UNIFIED BOOTSTRAP FUNCTION -----------------------------------------------------------####
 
@@ -1290,18 +545,13 @@ boot_iter = function(
   f.out,
   gbm_params = NULL,
   bootstrap_method = c("resample", "reweight"),
-  estimator = c("all", "drw", "drs"),
-  cross_fitting = FALSE,
-  k = 5,
-  stratify_folds = TRUE,
   wgt = "iptw",
   seed_offset,
-  alpha = 0,
-  aggregation = c("mean", "median", "all")
+  alpha = 0
 ) {
-  #' Unified bootstrap iteration function supporting all estimation methods
+  #' Bootstrap iteration function for DRS estimation (no cross-fitting)
   #'
-  #' Supports: resample/reweight × non-cross-fitted/cross-fitted (4 combinations)
+  #' Supports: resample (use existing weights) or reweight (re-estimate PS)
   #'
   #' @param data data.frame - original dataset
   #' @param indices integer - bootstrap sample indices (generated by boot())
@@ -1313,29 +563,17 @@ boot_iter = function(
   #' @param f.out character - outcome model formula (RHS only)
   #' @param gbm_params list - GBM parameters for ps() function (for reweight method)
   #' @param bootstrap_method character - "resample" (use existing weights) or "reweight" (re-estimate PS)
-  #' @param estimator character - which estimator to compute: "all" (both), "drw", or "drs"
-  #' @param cross_fitting logical - use cross-fitting or not
-  #' @param k integer - number of cross-fitting folds
-  #' @param stratify_folds logical - stratify folds by treatment (for cross-fitting)
   #' @param wgt character - name of weight variable (for resample method)
   #' @param seed_offset integer - base seed for reproducibility
   #' @param alpha numeric - propensity score truncation level (0 = no truncation)
-  #' @param aggregation character - how to aggregate fold estimates in cross-fitting: "mean" (default), "median", or "all" (both)
   #'
-  #' @return numeric vector: c(drw, drs, avg_asd, max_asd, ess) when aggregation is "mean" or "median"
-  #'         OR c(drw_mean, drw_median, drs_mean, drs_median, avg_asd, max_asd, ess) when aggregation is "all"
+  #' @return numeric vector: c(drs_att, avg_asd, max_asd, ess)
 
   # Wrap entire function in tryCatch for error handling
   tryCatch(
     {
       # Match arguments
       bootstrap_method = match.arg(bootstrap_method)
-      estimator = match.arg(estimator)
-      aggregation = match.arg(aggregation)
-
-      # Determine which estimators to compute
-      compute_drw = estimator %in% c("all", "drw")
-      compute_drs = estimator %in% c("all", "drs")
 
       # Resample data
       boot_data = data[indices, ]
@@ -1345,259 +583,55 @@ boot_iter = function(
         boot_data[[treatment]] == treated_level
       )
 
-      # Initialize estimates and weights
-      drw_est = NA_real_
-      drs_est = NA_real_
+      # Initialize weights vector
       weights_vec = NULL
 
-      if (!cross_fitting) {
-        # ========== NON-CROSS-FITTED ESTIMATION ==========
-
-        if (bootstrap_method == "resample") {
-          # Use existing weights from data
-          if (compute_drw) {
-            drw_result = drw_att(
-              outcome = outcome,
-              treatment = treatment,
-              f.out = f.out,
-              wgt = wgt,
-              data = boot_data,
-              verbose = FALSE
-            )
-          }
-
-          if (compute_drs) {
-            drs_result = drs_att(
-              outcome = outcome,
-              treatment = treatment,
-              f.out = f.out,
-              wgt = wgt,
-              data = boot_data,
-              verbose = FALSE
-            )
-          }
-
-          weights_vec = boot_data[[wgt]]
-        } else {
-          # Reweight: re-estimate propensity scores
-          set.seed(seed_offset)
-          ps_fit = do.call(
-            "ps",
-            c(
-              list(
-                formula = f.ps,
-                data = boot_data,
-                estimand = "ATT",
-                stop.method = "es.mean",
-                verbose = FALSE
-              ),
-              gbm_params
-            )
-          )
-
-          # Extract weights
-          boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
-
-          # Compute estimates
-          if (compute_drw) {
-            drw_result = drw_att(
-              outcome = outcome,
-              treatment = treatment,
-              f.out = f.out,
-              wgt = "ps_wgt",
-              data = boot_data,
-              verbose = FALSE
-            )
-          }
-
-          if (compute_drs) {
-            drs_result = drs_att(
-              outcome = outcome,
-              treatment = treatment,
-              f.out = f.out,
-              wgt = "ps_wgt",
-              data = boot_data,
-              verbose = FALSE
-            )
-          }
-
-          weights_vec = boot_data$ps_wgt
-        }
-
-        drw_est = if (compute_drw) drw_result$att else NA_real_
-        drs_est = if (compute_drs) drs_result$att else NA_real_
-      } else {
-        # ========== CROSS-FITTED ESTIMATION ==========
-
-        n = nrow(boot_data)
-        Y = boot_data[[outcome]]
-        Z = boot_data[[treatment]]
-        N1 = sum(Z)
-
-        # Create K folds with stratification
-        # Use indices to create unique seed for each bootstrap iteration
-        stratify_var = if (stratify_folds) treatment else NULL
-        set.seed(seed_offset + sum(indices))
-        folds = vfold_cv(
-          boot_data,
-          v = k,
-          strata = all_of(stratify_var)
+      if (bootstrap_method == "resample") {
+        # Use existing weights from data
+        drs_result = drs_att(
+          outcome = outcome,
+          treatment = treatment,
+          f.out = f.out,
+          wgt = wgt,
+          data = boot_data,
+          verbose = FALSE
         )
 
-        # Initialize storage for fold-specific estimates
-        mu_hat_0 = numeric(n)
-        weights = numeric(n)
-        drw_fold_estimates = numeric(k)
-        drs_fold_estimates = numeric(k)
-
-        # Cross-fitting loop
-        for (fold in 1:k) {
-          # Split data: predict on fold k, train on K-1 folds
-          train_idx = folds$splits[[fold]]$in_id
-          test_idx = setdiff(1:n, train_idx)
-
-          train_data = boot_data[train_idx, ]
-          test_data = boot_data[test_idx, ]
-
-          # Fit propensity score model on K-1 folds
-          set.seed(seed_offset + fold) # Fixed seed for GBM within bootstrap
-          ps_fit = do.call(
-            "ps",
-            c(
-              list(
-                formula = f.ps,
-                data = train_data,
-                estimand = "ATT",
-                stop.method = "es.mean",
-                verbose = FALSE
-              ),
-              gbm_params
-            )
+        weights_vec = boot_data[[wgt]]
+      } else {
+        # Reweight: re-estimate propensity scores
+        set.seed(seed_offset)
+        ps_fit = do.call(
+          "ps",
+          c(
+            list(
+              formula = f.ps,
+              data = boot_data,
+              estimand = "ATT",
+              stop.method = "es.mean",
+              verbose = FALSE
+            ),
+            gbm_params
           )
+        )
 
-          # Predict propensity scores for held-out fold k
-          ps_pred = predict(
-            ps_fit$gbm.obj,
-            newdata = test_data,
-            n.trees = ps_fit$desc$es.mean$n.trees,
-            type = "response"
-          )
+        # Extract weights
+        boot_data$ps_wgt = get.weights(ps_fit, stop.method = "es.mean")
 
-          # Truncate propensity scores if alpha > 0
-          if (alpha > 0) {
-            ps_pred = pmax(alpha, pmin(ps_pred, 1 - alpha))
-          }
+        # Compute DRS estimate
+        drs_result = drs_att(
+          outcome = outcome,
+          treatment = treatment,
+          f.out = f.out,
+          wgt = "ps_wgt",
+          data = boot_data,
+          verbose = FALSE
+        )
 
-          # Compute IPT weights for held-out fold (ATT weights)
-          weights[test_idx] = ifelse(
-            Z[test_idx] == 1,
-            1,
-            ps_pred / (1 - ps_pred)
-          )
-
-          # Fit outcome model on control units from K-1 folds
-          control_train = train_data[train_data[[treatment]] == 0, ]
-          mu0_fit = glm(
-            formula = as.formula(paste(outcome, "~", f.out)),
-            data = control_train,
-            family = "quasibinomial",
-            control = glm.control(maxit = 50)
-          )
-
-          # Predict counterfactual outcomes for held-out fold k
-          mu_hat_0[test_idx] = predict(
-            mu0_fit,
-            newdata = test_data,
-            type = "response"
-          )
-
-          # Compute fold-specific drw estimate
-          if (compute_drw) {
-            Y_k = Y[test_idx]
-            Z_k = Z[test_idx]
-            weights_k = weights[test_idx]
-            mu_hat_0_k = mu_hat_0[test_idx]
-            N1_k = sum(Z_k)
-
-            drw_fold_estimates[fold] = (1 / N1_k) *
-              sum((Z_k - (1 - Z_k) * weights_k) * (Y_k - mu_hat_0_k))
-          }
-
-          # Compute fold-specific DRS estimate
-          if (compute_drs) {
-            # Create weighted survey design for fold k
-            test_data_wgt = test_data
-            test_data_wgt$ps_wgt = weights[test_idx]
-
-            weighted_design = svydesign(
-              ids = ~1,
-              weights = ~ps_wgt,
-              data = test_data_wgt
-            )
-
-            # Build outcome model formula
-            if (f.out != "1") {
-              formula_str = paste(outcome, "~", treatment, "+", f.out)
-            } else {
-              formula_str = paste(outcome, "~", treatment)
-            }
-
-            # Fit weighted outcome model on fold k
-            fit = svyglm(
-              formula = as.formula(formula_str),
-              family = 'quasibinomial',
-              design = weighted_design
-            )
-
-            # Predict counterfactuals for treated units in fold k
-            treated_k = test_data_wgt[test_data_wgt[[treatment]] == 1, ]
-            counterfactual_k = treated_k
-            counterfactual_k[[treatment]] = 0
-
-            # Extract Y_k and Z_k if not already done for DRW
-            if (!compute_drw) {
-              Y_k = Y[test_idx]
-              Z_k = Z[test_idx]
-            }
-
-            mu0_drs_k = predict(
-              fit,
-              newdata = counterfactual_k,
-              type = "response"
-            )
-            mu_hat_0_drs = mean(mu0_drs_k)
-            mu_hat_1_drs = mean(Y_k[Z_k == 1])
-
-            drs_fold_estimates[fold] = mu_hat_1_drs - mu_hat_0_drs
-          }
-        }
-
-        # Aggregate across folds for final bootstrap estimates based on aggregation method
-        if (aggregation == "mean") {
-          drw_est = if (compute_drw) mean(drw_fold_estimates) else NA_real_
-          drs_est = if (compute_drs) mean(drs_fold_estimates) else NA_real_
-        } else if (aggregation == "median") {
-          drw_est = if (compute_drw) median(drw_fold_estimates) else NA_real_
-          drs_est = if (compute_drs) median(drs_fold_estimates) else NA_real_
-        } else {
-          # aggregation == "all" - compute both mean and median
-          drw_est_mean = if (compute_drw) mean(drw_fold_estimates) else NA_real_
-          drw_est_median = if (compute_drw) {
-            median(drw_fold_estimates)
-          } else {
-            NA_real_
-          }
-          drs_est_mean = if (compute_drs) mean(drs_fold_estimates) else NA_real_
-          drs_est_median = if (compute_drs) {
-            median(drs_fold_estimates)
-          } else {
-            NA_real_
-          }
-        }
-
-        # Use full sample weights for balance diagnostics
-        weights_vec = weights
+        weights_vec = boot_data$ps_wgt
       }
+
+      drs_est = drs_result$att
 
       # ========== COMPUTE BALANCE STATISTICS ==========
       avg_asd = NA_real_
@@ -1608,10 +642,10 @@ boot_iter = function(
         {
           # Extract all covariates (exclude treatment, outcome, and weight columns)
           exclude_cols = c(treatment, outcome)
-          if (!cross_fitting && bootstrap_method == "resample") {
+          if (bootstrap_method == "resample") {
             exclude_cols = c(exclude_cols, wgt)
           }
-          if (!cross_fitting && bootstrap_method == "reweight") {
+          if (bootstrap_method == "reweight") {
             exclude_cols = c(exclude_cols, "ps_wgt")
           }
 
@@ -1654,48 +688,22 @@ boot_iter = function(
         }
       )
 
-      # Return results
-      if (cross_fitting && aggregation == "all") {
-        return(c(
-          drw_mean = drw_est_mean,
-          drw_median = drw_est_median,
-          drs_mean = drs_est_mean,
-          drs_median = drs_est_median,
-          avg_asd = avg_asd,
-          max_asd = max_asd,
-          ess = ess
-        ))
-      } else {
-        return(c(
-          drw = drw_est,
-          drs = drs_est,
-          avg_asd = avg_asd,
-          max_asd = max_asd,
-          ess = ess
-        ))
-      }
+      # Return results: DRS estimate + balance metrics
+      return(c(
+        drs = drs_est,
+        avg_asd = avg_asd,
+        max_asd = max_asd,
+        ess = ess
+      ))
     },
     error = function(e) {
       # Return NAs if anything fails during bootstrap iteration
-      if (cross_fitting && aggregation == "all") {
-        return(c(
-          drw_mean = NA_real_,
-          drw_median = NA_real_,
-          drs_mean = NA_real_,
-          drs_median = NA_real_,
-          avg_asd = NA_real_,
-          max_asd = NA_real_,
-          ess = NA_real_
-        ))
-      } else {
-        return(c(
-          drw = NA_real_,
-          drs = NA_real_,
-          avg_asd = NA_real_,
-          max_asd = NA_real_,
-          ess = NA_real_
-        ))
-      }
+      return(c(
+        drs = NA_real_,
+        avg_asd = NA_real_,
+        max_asd = NA_real_,
+        ess = NA_real_
+      ))
     }
   )
 }
@@ -1719,12 +727,8 @@ DR_att = function(
     n.minobsinnode = 10
   ),
   bootstrap_method = c("resample", "reweight"),
-  estimator = c("all", "drw", "drs"),
   stratified = TRUE,
   wgt = "iptw",
-  cross_fitting = FALSE,
-  k = 5,
-  stratify_folds = TRUE,
   n_boot = 1000,
   seed = 123,
   verbose = TRUE,
@@ -1734,33 +738,25 @@ DR_att = function(
   ci_type = c("all", "norm", "basic", "perc"),
   sim = c("ordinary", "balanced"),
   save_to = NULL,
-  alpha = 0,
-  aggregation = c("mean", "median", "all")
+  alpha = 0
 ) {
-  #' Unified Bootstrap Doubly Robust ATT Estimation
+  #' Bootstrap Doubly Robust Standardization (DRS) ATT Estimation
   #'
-  #' Supports all combinations of:
-  #' - Bootstrap methods: resample (use existing weights) or reweight (re-estimate PS)
-  #' - Simulation schemes: ordinary or balanced bootstrap
-  #' - Cross-fitting: TRUE or FALSE
-  #' - Confidence intervals: normal, basic, percentile (no BCa)
-  #' - Estimator selection: both, DRW only, or DRS only
+  #' Supports stratified bootstrap with two methods:
+  #' - resample: use existing propensity score weights (faster)
+  #' - reweight: re-estimate propensity scores in each bootstrap iteration (more conservative)
   #'
   #' @param outcome character - name of outcome variable
   #' @param treatment character - name of treatment variable
   #' @param treated_level string - level of treatment variable indicating treated
   #' @param control_level string - level of treatment variable indicating control
-  #' @param f.ps formula - propensity score model formula (required for reweight and cross-fitting)
+  #' @param f.ps formula - propensity score model formula (required for reweight method)
   #' @param f.out character - outcome model formula (RHS only)
   #' @param data data.frame - dataset (must contain wgt if bootstrap_method = "resample")
   #' @param gbm_params list - GBM parameters for ps() function
   #' @param bootstrap_method character - "resample" (faster) or "reweight" (more conservative)
-  #' @param estimator character - which estimator to run: "all" (both, default), "drw", or "drs"
   #' @param stratified logical - use stratified bootstrap to maintain treatment/control proportions
   #' @param wgt character - name of propensity score weight column in data (for resample method)
-  #' @param cross_fitting logical - use cross-fitting to reduce overfitting bias
-  #' @param k integer - number of cross-fitting folds
-  #' @param stratify_folds logical - stratify folds by treatment (within cross-fitting)
   #' @param n_boot integer - number of bootstrap replications
   #' @param seed integer - random seed
   #' @param verbose logical - print progress and results
@@ -1771,19 +767,13 @@ DR_att = function(
   #' @param sim character - bootstrap simulation: "ordinary" or "balanced"
   #' @param save_to character - directory path to save diagnostic plots (NULL = don't save)
   #' @param alpha numeric - propensity score truncation level (0 = no truncation)
-  #' @param aggregation character - how to aggregate fold estimates in cross-fitting: "mean" (default), "median", or "all" (both).
-  #'   Only meaningful when cross_fitting = TRUE. When "all", returns separate results for both mean and median aggregation.
   #'
-  #' @return list with estimates, SEs, CIs, p-values, balance diagnostics, and bootstrap samples
-  #'   (only includes results for selected estimator(s)).
-  #'   When aggregation = "all", results are nested: results$drw$mean, results$drw$median, etc.
+  #' @return list with DRS estimates, SEs, CIs, p-values, balance diagnostics, and bootstrap samples
 
   # Match and validate arguments
   bootstrap_method = match.arg(bootstrap_method)
-  estimator = match.arg(estimator)
   ci_type = match.arg(ci_type)
   sim = match.arg(sim)
-  aggregation = match.arg(aggregation)
 
   # Validate inputs based on bootstrap method
   if (bootstrap_method == "resample") {
@@ -1796,30 +786,19 @@ DR_att = function(
     }
   }
 
-  if (cross_fitting && is.null(f.ps)) {
-    stop("f.ps formula required when cross_fitting = TRUE")
-  }
-
   if (bootstrap_method == "reweight" && is.null(f.ps)) {
     stop("f.ps formula required when bootstrap_method = 'reweight'")
   }
 
   if (verbose) {
-    cat("=== Bootstrap Doubly Robust ATT Estimation ===\n")
+    cat("=== Bootstrap DRS ATT Estimation ===\n")
     cat("Outcome:", outcome, "\n")
     cat("Treatment:", treatment, "\n")
     cat("Treated level:", treated_level, "\n")
     cat("Control level:", control_level, "\n")
     cat("Bootstrap method:", bootstrap_method, "\n")
-    cat("Estimator:", estimator, "\n")
     if (bootstrap_method == "resample") {
       cat("PS weight variable:", wgt, "\n")
-    }
-    cat("Cross-fitting:", cross_fitting, "\n")
-    if (cross_fitting) {
-      cat("  Number of folds:", k, "\n")
-      cat("  Stratify folds:", stratify_folds, "\n")
-      cat("  Aggregation method:", aggregation, "\n")
     }
     cat("Bootstrap replications:", n_boot, "\n")
     cat("Bootstrap simulation type:", sim, "\n")
@@ -1869,17 +848,13 @@ DR_att = function(
 
   # Bootstrap
   if (verbose) {
-    cat("Running bootstrap using boot package...\n")
-    if (cross_fitting) {
-      cat("Note: Each bootstrap iteration performs", k, "cross-fitting folds\n")
-      cat("Total model fits:", n_boot, "×", k, "=", n_boot * k, "\n\n")
-    }
+    cat("Running bootstrap using boot package...\n\n")
   }
 
   # Set seed for reproducibility
   set.seed(seed)
 
-  # Run boot() with unified boot_iter function
+  # Run boot() with boot_iter function
   boot_result = boot::boot(
     data = analysis_data,
     statistic = boot_iter,
@@ -1897,178 +872,45 @@ DR_att = function(
     f.out = f.out,
     gbm_params = gbm_params,
     bootstrap_method = bootstrap_method,
-    estimator = estimator,
-    cross_fitting = cross_fitting,
-    k = k,
-    stratify_folds = stratify_folds,
     wgt = wgt,
     seed_offset = seed,
-    alpha = alpha,
-    aggregation = aggregation
+    alpha = alpha
   )
 
-  # Check if we're in the "all" aggregation case
-  use_all_aggregation = (aggregation == "all" && cross_fitting)
+  # Extract point estimates and bootstrap samples
+  # boot_result has 4 columns: drs, avg_asd, max_asd, ess
+  drs_point_att = boot_result$t0[1]
 
-  # Extract point estimates and bootstrap samples based on aggregation type
-  if (use_all_aggregation) {
-    # When aggregation = "all" and cross_fitting = TRUE:
-    # boot_result has 7 columns: drw_mean, drw_median, drs_mean, drs_median, avg_asd, max_asd, ess
+  if (verbose) {
+    cat("\nPoint Estimate:\n")
+    cat(sprintf("  DRS ATT: %.4f\n", drs_point_att))
+    cat("\n")
+  }
 
-    drw_point_att_mean = if (estimator %in% c("all", "drw")) {
-      boot_result$t0[1]
-    } else {
-      NA_real_
-    }
-    drw_point_att_median = if (estimator %in% c("all", "drw")) {
-      boot_result$t0[2]
-    } else {
-      NA_real_
-    }
-    drs_point_att_mean = if (estimator %in% c("all", "drs")) {
-      boot_result$t0[3]
-    } else {
-      NA_real_
-    }
-    drs_point_att_median = if (estimator %in% c("all", "drs")) {
-      boot_result$t0[4]
-    } else {
-      NA_real_
-    }
+  # Extract bootstrap samples
+  drs_boots = boot_result$t[, 1]
 
-    if (verbose) {
-      cat("\nPoint Estimates:\n")
-      if (estimator %in% c("all", "drw")) {
-        cat(sprintf("  DRW ATT (mean):   %.4f\n", drw_point_att_mean))
-        cat(sprintf("  DRW ATT (median): %.4f\n", drw_point_att_median))
-      }
-      if (estimator %in% c("all", "drs")) {
-        cat(sprintf("  DRS ATT (mean):   %.4f\n", drs_point_att_mean))
-        cat(sprintf("  DRS ATT (median): %.4f\n", drs_point_att_median))
-      }
-      cat("\n")
-    }
-
-    # Extract bootstrap samples (4 columns)
-    drw_boots_mean = if (estimator %in% c("all", "drw")) {
-      boot_result$t[, 1]
-    } else {
-      NULL
-    }
-    drw_boots_median = if (estimator %in% c("all", "drw")) {
-      boot_result$t[, 2]
-    } else {
-      NULL
-    }
-    drs_boots_mean = if (estimator %in% c("all", "drs")) {
-      boot_result$t[, 3]
-    } else {
-      NULL
-    }
-    drs_boots_median = if (estimator %in% c("all", "drs")) {
-      boot_result$t[, 4]
-    } else {
-      NULL
-    }
-
-    # Extract balance metrics (shifted to columns 5-7)
-    if (ncol(boot_result$t) >= 7) {
-      avg_asd_boots = boot_result$t[, 5]
-      max_asd_boots = boot_result$t[, 6]
-      ess_boots = boot_result$t[, 7]
-    } else {
-      avg_asd_boots = NULL
-      max_asd_boots = NULL
-      ess_boots = NULL
-    }
+  # Extract balance metrics if available
+  if (ncol(boot_result$t) >= 4) {
+    avg_asd_boots = boot_result$t[, 2]
+    max_asd_boots = boot_result$t[, 3]
+    ess_boots = boot_result$t[, 4]
   } else {
-    # Standard case: aggregation is "mean" or "median", or cross_fitting = FALSE
-    # boot_result has 5 columns: drw, drs, avg_asd, max_asd, ess
-
-    drw_point_att = if (estimator %in% c("all", "drw")) {
-      boot_result$t0[1]
-    } else {
-      NA_real_
-    }
-    drs_point_att = if (estimator %in% c("all", "drs")) {
-      boot_result$t0[2]
-    } else {
-      NA_real_
-    }
-
-    if (verbose) {
-      cat("\nPoint Estimates:\n")
-      if (estimator %in% c("all", "drw")) {
-        cat(sprintf("  DRW ATT: %.4f\n", drw_point_att))
-      }
-      if (estimator %in% c("all", "drs")) {
-        cat(sprintf("  DRS ATT:  %.4f\n", drs_point_att))
-      }
-      cat("\n")
-    }
-
-    # Extract bootstrap samples
-    drw_boots = if (estimator %in% c("all", "drw")) boot_result$t[, 1] else NULL
-    drs_boots = if (estimator %in% c("all", "drs")) boot_result$t[, 2] else NULL
-
-    # Extract balance metrics if available
-    if (ncol(boot_result$t) >= 5) {
-      avg_asd_boots = boot_result$t[, 3]
-      max_asd_boots = boot_result$t[, 4]
-      ess_boots = boot_result$t[, 5]
-    } else {
-      avg_asd_boots = NULL
-      max_asd_boots = NULL
-      ess_boots = NULL
-    }
+    avg_asd_boots = NULL
+    max_asd_boots = NULL
+    ess_boots = NULL
   }
 
   # Remove failed iterations
-  # Determine valid indices based on whichever estimator was computed
-  if (use_all_aggregation) {
-    # For "all" aggregation, check the first non-NULL bootstrap column
-    if (estimator == "drw") {
-      valid_idx = !is.na(drw_boots_mean)
-    } else if (estimator == "drs") {
-      valid_idx = !is.na(drs_boots_mean)
-    } else {
-      # For "all", use DRW mean to determine valid indices
-      valid_idx = !is.na(drw_boots_mean)
-    }
-  } else {
-    if (estimator == "drw") {
-      valid_idx = !is.na(drw_boots)
-    } else if (estimator == "drs") {
-      valid_idx = !is.na(drs_boots)
-    } else {
-      # For "all", use DRW to determine valid indices
-      valid_idx = !is.na(drw_boots)
-    }
-  }
-
+  valid_idx = !is.na(drs_boots)
   n_failed = sum(!valid_idx)
+
   if (n_failed > 0 && verbose) {
     cat(sprintf("\nWarning: %d bootstrap iterations failed\n", n_failed))
   }
 
-  # Filter valid bootstrap samples based on aggregation type
-  if (use_all_aggregation) {
-    if (!is.null(drw_boots_mean)) {
-      drw_boots_mean = drw_boots_mean[valid_idx]
-      drw_boots_median = drw_boots_median[valid_idx]
-    }
-    if (!is.null(drs_boots_mean)) {
-      drs_boots_mean = drs_boots_mean[valid_idx]
-      drs_boots_median = drs_boots_median[valid_idx]
-    }
-  } else {
-    if (!is.null(drw_boots)) {
-      drw_boots = drw_boots[valid_idx]
-    }
-    if (!is.null(drs_boots)) {
-      drs_boots = drs_boots[valid_idx]
-    }
-  }
+  # Filter valid bootstrap samples
+  drs_boots = drs_boots[valid_idx]
 
   # Also filter balance metrics if they exist
   if (!is.null(avg_asd_boots)) {
@@ -2077,137 +919,21 @@ DR_att = function(
     ess_boots = ess_boots[valid_idx]
   }
 
-  # Compute standard errors based on aggregation type
-  if (use_all_aggregation) {
-    drw_se_mean = if (!is.null(drw_boots_mean)) sd(drw_boots_mean) else NA_real_
-    drw_se_median = if (!is.null(drw_boots_median)) {
-      sd(drw_boots_median)
-    } else {
-      NA_real_
-    }
-    drs_se_mean = if (!is.null(drs_boots_mean)) sd(drs_boots_mean) else NA_real_
-    drs_se_median = if (!is.null(drs_boots_median)) {
-      sd(drs_boots_median)
-    } else {
-      NA_real_
-    }
-  } else {
-    drw_se = if (!is.null(drw_boots)) sd(drw_boots) else NA_real_
-    drs_se = if (!is.null(drs_boots)) sd(drs_boots) else NA_real_
-  }
+  # Compute standard error
+  drs_se = sd(drs_boots)
 
-  # Perform Shapiro-Wilk normality tests based on aggregation type
-  if (use_all_aggregation) {
-    # Four separate tests for mean and median aggregations
-    drw_shapiro_mean = if (!is.null(drw_boots_mean)) {
-      tryCatch(
-        shapiro.test(drw_boots_mean),
-        error = function(e) {
-          warning(sprintf(
-            "Shapiro-Wilk test failed for DRW (mean): %s",
-            e$message
-          ))
-          list(
-            statistic = NA,
-            p.value = NA,
-            method = "Shapiro-Wilk normality test"
-          )
-        }
+  # Perform Shapiro-Wilk normality test for DRS
+  drs_shapiro = tryCatch(
+    shapiro.test(drs_boots),
+    error = function(e) {
+      warning(sprintf("Shapiro-Wilk test failed for DRS: %s", e$message))
+      list(
+        statistic = NA,
+        p.value = NA,
+        method = "Shapiro-Wilk normality test"
       )
-    } else {
-      list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
     }
-
-    drw_shapiro_median = if (!is.null(drw_boots_median)) {
-      tryCatch(
-        shapiro.test(drw_boots_median),
-        error = function(e) {
-          warning(sprintf(
-            "Shapiro-Wilk test failed for DRW (median): %s",
-            e$message
-          ))
-          list(
-            statistic = NA,
-            p.value = NA,
-            method = "Shapiro-Wilk normality test"
-          )
-        }
-      )
-    } else {
-      list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
-    }
-
-    drs_shapiro_mean = if (!is.null(drs_boots_mean)) {
-      tryCatch(
-        shapiro.test(drs_boots_mean),
-        error = function(e) {
-          warning(sprintf(
-            "Shapiro-Wilk test failed for DRS (mean): %s",
-            e$message
-          ))
-          list(
-            statistic = NA,
-            p.value = NA,
-            method = "Shapiro-Wilk normality test"
-          )
-        }
-      )
-    } else {
-      list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
-    }
-
-    drs_shapiro_median = if (!is.null(drs_boots_median)) {
-      tryCatch(
-        shapiro.test(drs_boots_median),
-        error = function(e) {
-          warning(sprintf(
-            "Shapiro-Wilk test failed for DRS (median): %s",
-            e$message
-          ))
-          list(
-            statistic = NA,
-            p.value = NA,
-            method = "Shapiro-Wilk normality test"
-          )
-        }
-      )
-    } else {
-      list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
-    }
-  } else {
-    # Standard case: single test for each estimator
-    drw_shapiro = if (!is.null(drw_boots)) {
-      tryCatch(
-        shapiro.test(drw_boots),
-        error = function(e) {
-          warning(sprintf("Shapiro-Wilk test failed for DRW: %s", e$message))
-          list(
-            statistic = NA,
-            p.value = NA,
-            method = "Shapiro-Wilk normality test"
-          )
-        }
-      )
-    } else {
-      list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
-    }
-
-    drs_shapiro = if (!is.null(drs_boots)) {
-      tryCatch(
-        shapiro.test(drs_boots),
-        error = function(e) {
-          warning(sprintf("Shapiro-Wilk test failed for DRS: %s", e$message))
-          list(
-            statistic = NA,
-            p.value = NA,
-            method = "Shapiro-Wilk normality test"
-          )
-        }
-      )
-    } else {
-      list(statistic = NA, p.value = NA, method = "Shapiro-Wilk normality test")
-    }
-  }
+  )
 
   # Compute confidence intervals using boot.ci()
   # We need to filter the boot object to remove NA rows
@@ -2222,667 +948,93 @@ DR_att = function(
     ci_types_to_compute = ci_type
   }
 
-  # Branch based on aggregation type
-  if (use_all_aggregation) {
-    # When aggregation = "all", we need to compute CIs for 4 estimators
-    # Indices: 1=drw_mean, 2=drw_median, 3=drs_mean, 4=drs_median
+  # Compute CIs for DRS (index = 1)
+  drs_ci = tryCatch(
+    boot::boot.ci(
+      boot_result_filtered,
+      type = ci_types_to_compute,
+      index = 1
+    ),
+    error = function(e) {
+      warning("boot.ci() failed for DRS, falling back to manual computation")
+      NULL
+    }
+  )
 
-    # Compute CIs for DRW mean (index = 1)
-    drw_ci_mean = if (estimator %in% c("all", "drw")) {
-      tryCatch(
-        boot::boot.ci(
-          boot_result_filtered,
-          type = ci_types_to_compute,
-          index = 1
-        ),
-        error = function(e) {
-          warning("boot.ci() failed for DRW (mean)")
-          NULL
-        }
-      )
+  # Extract CIs or fall back to manual computation
+  if (!is.null(drs_ci)) {
+    drs_ci_normal = if ("normal" %in% names(drs_ci)) {
+      drs_ci$normal[2:3]
+    } else {
+      c(drs_point_att - 1.96 * drs_se, drs_point_att + 1.96 * drs_se)
+    }
+    drs_ci_basic = if ("basic" %in% names(drs_ci)) {
+      drs_ci$basic[4:5]
     } else {
       NULL
     }
-
-    # Compute CIs for DRW median (index = 2)
-    drw_ci_median = if (estimator %in% c("all", "drw")) {
-      tryCatch(
-        boot::boot.ci(
-          boot_result_filtered,
-          type = ci_types_to_compute,
-          index = 2
-        ),
-        error = function(e) {
-          warning("boot.ci() failed for DRW (median)")
-          NULL
-        }
-      )
+    drs_ci_percentile = if ("percent" %in% names(drs_ci)) {
+      drs_ci$percent[4:5]
     } else {
-      NULL
-    }
-
-    # Compute CIs for DRS mean (index = 3)
-    drs_ci_mean = if (estimator %in% c("all", "drs")) {
-      tryCatch(
-        boot::boot.ci(
-          boot_result_filtered,
-          type = ci_types_to_compute,
-          index = 3
-        ),
-        error = function(e) {
-          warning("boot.ci() failed for DRS (mean)")
-          NULL
-        }
-      )
-    } else {
-      NULL
-    }
-
-    # Compute CIs for DRS median (index = 4)
-    drs_ci_median = if (estimator %in% c("all", "drs")) {
-      tryCatch(
-        boot::boot.ci(
-          boot_result_filtered,
-          type = ci_types_to_compute,
-          index = 4
-        ),
-        error = function(e) {
-          warning("boot.ci() failed for DRS (median)")
-          NULL
-        }
-      )
-    } else {
-      NULL
-    }
-
-    # Extract CIs for DRW mean
-    if (estimator %in% c("all", "drw")) {
-      if (!is.null(drw_ci_mean)) {
-        drw_ci_normal_mean = if ("normal" %in% names(drw_ci_mean)) {
-          drw_ci_mean$normal[2:3]
-        } else {
-          c(
-            drw_point_att_mean - 1.96 * drw_se_mean,
-            drw_point_att_mean + 1.96 * drw_se_mean
-          )
-        }
-        drw_ci_basic_mean = if ("basic" %in% names(drw_ci_mean)) {
-          drw_ci_mean$basic[4:5]
-        } else {
-          NULL
-        }
-        drw_ci_percentile_mean = if ("percent" %in% names(drw_ci_mean)) {
-          drw_ci_mean$percent[4:5]
-        } else {
-          quantile(drw_boots_mean, probs = c(0.025, 0.975))
-        }
-      } else {
-        drw_ci_normal_mean = c(
-          drw_point_att_mean - 1.96 * drw_se_mean,
-          drw_point_att_mean + 1.96 * drw_se_mean
-        )
-        drw_ci_basic_mean = NULL
-        drw_ci_percentile_mean = quantile(
-          drw_boots_mean,
-          probs = c(0.025, 0.975)
-        )
-      }
-
-      # Extract CIs for DRW median
-      if (!is.null(drw_ci_median)) {
-        drw_ci_normal_median = if ("normal" %in% names(drw_ci_median)) {
-          drw_ci_median$normal[2:3]
-        } else {
-          c(
-            drw_point_att_median - 1.96 * drw_se_median,
-            drw_point_att_median + 1.96 * drw_se_median
-          )
-        }
-        drw_ci_basic_median = if ("basic" %in% names(drw_ci_median)) {
-          drw_ci_median$basic[4:5]
-        } else {
-          NULL
-        }
-        drw_ci_percentile_median = if ("percent" %in% names(drw_ci_median)) {
-          drw_ci_median$percent[4:5]
-        } else {
-          quantile(drw_boots_median, probs = c(0.025, 0.975))
-        }
-      } else {
-        drw_ci_normal_median = c(
-          drw_point_att_median - 1.96 * drw_se_median,
-          drw_point_att_median + 1.96 * drw_se_median
-        )
-        drw_ci_basic_median = NULL
-        drw_ci_percentile_median = quantile(
-          drw_boots_median,
-          probs = c(0.025, 0.975)
-        )
-      }
-    } else {
-      drw_ci_normal_mean = drw_ci_basic_mean = drw_ci_percentile_mean = NULL
-      drw_ci_normal_median = drw_ci_basic_median = drw_ci_percentile_median = NULL
-    }
-
-    # Extract CIs for DRS mean and median
-    if (estimator %in% c("all", "drs")) {
-      if (!is.null(drs_ci_mean)) {
-        drs_ci_normal_mean = if ("normal" %in% names(drs_ci_mean)) {
-          drs_ci_mean$normal[2:3]
-        } else {
-          c(
-            drs_point_att_mean - 1.96 * drs_se_mean,
-            drs_point_att_mean + 1.96 * drs_se_mean
-          )
-        }
-        drs_ci_basic_mean = if ("basic" %in% names(drs_ci_mean)) {
-          drs_ci_mean$basic[4:5]
-        } else {
-          NULL
-        }
-        drs_ci_percentile_mean = if ("percent" %in% names(drs_ci_mean)) {
-          drs_ci_mean$percent[4:5]
-        } else {
-          quantile(drs_boots_mean, probs = c(0.025, 0.975))
-        }
-      } else {
-        drs_ci_normal_mean = c(
-          drs_point_att_mean - 1.96 * drs_se_mean,
-          drs_point_att_mean + 1.96 * drs_se_mean
-        )
-        drs_ci_basic_mean = NULL
-        drs_ci_percentile_mean = quantile(
-          drs_boots_mean,
-          probs = c(0.025, 0.975)
-        )
-      }
-
-      if (!is.null(drs_ci_median)) {
-        drs_ci_normal_median = if ("normal" %in% names(drs_ci_median)) {
-          drs_ci_median$normal[2:3]
-        } else {
-          c(
-            drs_point_att_median - 1.96 * drs_se_median,
-            drs_point_att_median + 1.96 * drs_se_median
-          )
-        }
-        drs_ci_basic_median = if ("basic" %in% names(drs_ci_median)) {
-          drs_ci_median$basic[4:5]
-        } else {
-          NULL
-        }
-        drs_ci_percentile_median = if ("percent" %in% names(drs_ci_median)) {
-          drs_ci_median$percent[4:5]
-        } else {
-          quantile(drs_boots_median, probs = c(0.025, 0.975))
-        }
-      } else {
-        drs_ci_normal_median = c(
-          drs_point_att_median - 1.96 * drs_se_median,
-          drs_point_att_median + 1.96 * drs_se_median
-        )
-        drs_ci_basic_median = NULL
-        drs_ci_percentile_median = quantile(
-          drs_boots_median,
-          probs = c(0.025, 0.975)
-        )
-      }
-    } else {
-      drs_ci_normal_mean = drs_ci_basic_mean = drs_ci_percentile_mean = NULL
-      drs_ci_normal_median = drs_ci_basic_median = drs_ci_percentile_median = NULL
-    }
-
-    # Compute p-values for all 4 estimators
-    drw_z_mean = if (estimator %in% c("all", "drw")) {
-      drw_point_att_mean / drw_se_mean
-    } else {
-      NA_real_
-    }
-    drw_pval_mean = if (estimator %in% c("all", "drw")) {
-      2 * pnorm(-abs(drw_z_mean))
-    } else {
-      NA_real_
-    }
-
-    drw_z_median = if (estimator %in% c("all", "drw")) {
-      drw_point_att_median / drw_se_median
-    } else {
-      NA_real_
-    }
-    drw_pval_median = if (estimator %in% c("all", "drw")) {
-      2 * pnorm(-abs(drw_z_median))
-    } else {
-      NA_real_
-    }
-
-    drs_z_mean = if (estimator %in% c("all", "drs")) {
-      drs_point_att_mean / drs_se_mean
-    } else {
-      NA_real_
-    }
-    drs_pval_mean = if (estimator %in% c("all", "drs")) {
-      2 * pnorm(-abs(drs_z_mean))
-    } else {
-      NA_real_
-    }
-
-    drs_z_median = if (estimator %in% c("all", "drs")) {
-      drs_point_att_median / drs_se_median
-    } else {
-      NA_real_
-    }
-    drs_pval_median = if (estimator %in% c("all", "drs")) {
-      2 * pnorm(-abs(drs_z_median))
-    } else {
-      NA_real_
+      quantile(drs_boots, probs = c(0.025, 0.975))
     }
   } else {
-    # Standard case: single CI for each estimator
-    # Compute CIs for DRW (index = 1)
-    drw_ci = if (estimator %in% c("all", "drw")) {
-      tryCatch(
-        boot::boot.ci(
-          boot_result_filtered,
-          type = ci_types_to_compute,
-          index = 1
-        ),
-        error = function(e) {
-          warning(
-            "boot.ci() failed for DRW, falling back to manual computation"
-          )
-          NULL
-        }
-      )
-    } else {
-      NULL
-    }
-
-    # Compute CIs for DRS (index = 2)
-    drs_ci = if (estimator %in% c("all", "drs")) {
-      tryCatch(
-        boot::boot.ci(
-          boot_result_filtered,
-          type = ci_types_to_compute,
-          index = 2
-        ),
-        error = function(e) {
-          warning(
-            "boot.ci() failed for DRS, falling back to manual computation"
-          )
-          NULL
-        }
-      )
-    } else {
-      NULL
-    }
-
-    # Extract CIs or fall back to manual computation
-    if (estimator %in% c("all", "drw")) {
-      if (!is.null(drw_ci)) {
-        drw_ci_normal = if ("normal" %in% names(drw_ci)) {
-          drw_ci$normal[2:3]
-        } else {
-          c(drw_point_att - 1.96 * drw_se, drw_point_att + 1.96 * drw_se)
-        }
-        drw_ci_basic = if ("basic" %in% names(drw_ci)) {
-          drw_ci$basic[4:5]
-        } else {
-          NULL
-        }
-        drw_ci_percentile = if ("percent" %in% names(drw_ci)) {
-          drw_ci$percent[4:5]
-        } else {
-          quantile(drw_boots, probs = c(0.025, 0.975))
-        }
-      } else {
-        drw_ci_normal = c(
-          drw_point_att - 1.96 * drw_se,
-          drw_point_att + 1.96 * drw_se
-        )
-        drw_ci_basic = NULL
-        drw_ci_percentile = quantile(drw_boots, probs = c(0.025, 0.975))
-      }
-    } else {
-      drw_ci_normal = NULL
-      drw_ci_basic = NULL
-      drw_ci_percentile = NULL
-    }
-
-    if (estimator %in% c("all", "drs")) {
-      if (!is.null(drs_ci)) {
-        drs_ci_normal = if ("normal" %in% names(drs_ci)) {
-          drs_ci$normal[2:3]
-        } else {
-          c(drs_point_att - 1.96 * drs_se, drs_point_att + 1.96 * drs_se)
-        }
-        drs_ci_basic = if ("basic" %in% names(drs_ci)) {
-          drs_ci$basic[4:5]
-        } else {
-          NULL
-        }
-        drs_ci_percentile = if ("percent" %in% names(drs_ci)) {
-          drs_ci$percent[4:5]
-        } else {
-          quantile(drs_boots, probs = c(0.025, 0.975))
-        }
-      } else {
-        drs_ci_normal = c(
-          drs_point_att - 1.96 * drs_se,
-          drs_point_att + 1.96 * drs_se
-        )
-        drs_ci_basic = NULL
-        drs_ci_percentile = quantile(drs_boots, probs = c(0.025, 0.975))
-      }
-    } else {
-      drs_ci_normal = NULL
-      drs_ci_basic = NULL
-      drs_ci_percentile = NULL
-    }
-
-    # Compute p-values using normal approximation
-    drw_z = if (estimator %in% c("all", "drw")) {
-      drw_point_att / drw_se
-    } else {
-      NA_real_
-    }
-    drw_pval = if (estimator %in% c("all", "drw")) {
-      2 * pnorm(-abs(drw_z))
-    } else {
-      NA_real_
-    }
-
-    drs_z = if (estimator %in% c("all", "drs")) {
-      drs_point_att / drs_se
-    } else {
-      NA_real_
-    }
-    drs_pval = if (estimator %in% c("all", "drs")) {
-      2 * pnorm(-abs(drs_z))
-    } else {
-      NA_real_
-    }
+    drs_ci_normal = c(drs_point_att - 1.96 * drs_se, drs_point_att + 1.96 * drs_se)
+    drs_ci_basic = NULL
+    drs_ci_percentile = quantile(drs_boots, probs = c(0.025, 0.975))
   }
+
+  # Compute p-value using normal approximation
+  drs_z = drs_point_att / drs_se
+  drs_pval = 2 * pnorm(-abs(drs_z))
 
   # Print results
   if (verbose) {
-    if (use_all_aggregation) {
-      # When aggregation = "all", print 4 sets of results
+    cat("\n=== DRS Results ===\n")
+    cat(sprintf("ATT estimate:     %.4f\n", drs_point_att))
+    cat(sprintf("Standard error:   %.4f\n", drs_se))
+    cat(sprintf("p-value:          %.4f\n", drs_pval))
+    cat("\nConfidence Intervals (95%):\n")
+    if (!is.null(drs_ci_normal)) {
+      cat(sprintf(
+        "  Normal:      [%.4f, %.4f]\n",
+        drs_ci_normal[1],
+        drs_ci_normal[2]
+      ))
+    }
+    if (!is.null(drs_ci_basic)) {
+      cat(sprintf(
+        "  Basic:       [%.4f, %.4f]\n",
+        drs_ci_basic[1],
+        drs_ci_basic[2]
+      ))
+    }
+    if (!is.null(drs_ci_percentile)) {
+      cat(sprintf(
+        "  Percentile:  [%.4f, %.4f]\n",
+        drs_ci_percentile[1],
+        drs_ci_percentile[2]
+      ))
+    }
 
-      if (estimator %in% c("all", "drw")) {
-        # DRW Mean results
-        cat("\n=== DRW Results (Mean Aggregation) ===\n")
-        cat(sprintf("ATT estimate:     %.4f\n", drw_point_att_mean))
-        cat(sprintf("Standard error:   %.4f\n", drw_se_mean))
-        cat(sprintf("p-value:          %.4f\n", drw_pval_mean))
-        cat("\nConfidence Intervals (95%):\n")
-        if (!is.null(drw_ci_normal_mean)) {
-          cat(sprintf(
-            "  Normal:      [%.4f, %.4f]\n",
-            drw_ci_normal_mean[1],
-            drw_ci_normal_mean[2]
-          ))
-        }
-        if (!is.null(drw_ci_basic_mean)) {
-          cat(sprintf(
-            "  Basic:       [%.4f, %.4f]\n",
-            drw_ci_basic_mean[1],
-            drw_ci_basic_mean[2]
-          ))
-        }
-        if (!is.null(drw_ci_percentile_mean)) {
-          cat(sprintf(
-            "  Percentile:  [%.4f, %.4f]\n",
-            drw_ci_percentile_mean[1],
-            drw_ci_percentile_mean[2]
-          ))
-        }
-        cat("\nNormality Test (Shapiro-Wilk):\n")
-        if (!is.na(drw_shapiro_mean$p.value)) {
-          cat(sprintf("  W statistic: %.4f\n", drw_shapiro_mean$statistic))
-          cat(sprintf(
-            "  p-value:     %.4f %s\n",
-            drw_shapiro_mean$p.value,
-            ifelse(
-              drw_shapiro_mean$p.value < 0.05,
-              "(reject normality at 0.05 level)",
-              "(fail to reject normality)"
-            )
-          ))
-        } else {
-          cat("  Test failed (likely due to sample size or other issues)\n")
-        }
-
-        # DRW Median results
-        cat("\n=== DRW Results (Median Aggregation) ===\n")
-        cat(sprintf("ATT estimate:     %.4f\n", drw_point_att_median))
-        cat(sprintf("Standard error:   %.4f\n", drw_se_median))
-        cat(sprintf("p-value:          %.4f\n", drw_pval_median))
-        cat("\nConfidence Intervals (95%):\n")
-        if (!is.null(drw_ci_normal_median)) {
-          cat(sprintf(
-            "  Normal:      [%.4f, %.4f]\n",
-            drw_ci_normal_median[1],
-            drw_ci_normal_median[2]
-          ))
-        }
-        if (!is.null(drw_ci_basic_median)) {
-          cat(sprintf(
-            "  Basic:       [%.4f, %.4f]\n",
-            drw_ci_basic_median[1],
-            drw_ci_basic_median[2]
-          ))
-        }
-        if (!is.null(drw_ci_percentile_median)) {
-          cat(sprintf(
-            "  Percentile:  [%.4f, %.4f]\n",
-            drw_ci_percentile_median[1],
-            drw_ci_percentile_median[2]
-          ))
-        }
-        cat("\nNormality Test (Shapiro-Wilk):\n")
-        if (!is.na(drw_shapiro_median$p.value)) {
-          cat(sprintf("  W statistic: %.4f\n", drw_shapiro_median$statistic))
-          cat(sprintf(
-            "  p-value:     %.4f %s\n",
-            drw_shapiro_median$p.value,
-            ifelse(
-              drw_shapiro_median$p.value < 0.05,
-              "(reject normality at 0.05 level)",
-              "(fail to reject normality)"
-            )
-          ))
-        } else {
-          cat("  Test failed (likely due to sample size or other issues)\n")
-        }
-      }
-
-      if (estimator %in% c("all", "drs")) {
-        # DRS Mean results
-        cat("\n=== DRS Results (Mean Aggregation) ===\n")
-        cat(sprintf("ATT estimate:     %.4f\n", drs_point_att_mean))
-        cat(sprintf("Standard error:   %.4f\n", drs_se_mean))
-        cat(sprintf("p-value:          %.4f\n", drs_pval_mean))
-        cat("\nConfidence Intervals (95%):\n")
-        if (!is.null(drs_ci_normal_mean)) {
-          cat(sprintf(
-            "  Normal:      [%.4f, %.4f]\n",
-            drs_ci_normal_mean[1],
-            drs_ci_normal_mean[2]
-          ))
-        }
-        if (!is.null(drs_ci_basic_mean)) {
-          cat(sprintf(
-            "  Basic:       [%.4f, %.4f]\n",
-            drs_ci_basic_mean[1],
-            drs_ci_basic_mean[2]
-          ))
-        }
-        if (!is.null(drs_ci_percentile_mean)) {
-          cat(sprintf(
-            "  Percentile:  [%.4f, %.4f]\n",
-            drs_ci_percentile_mean[1],
-            drs_ci_percentile_mean[2]
-          ))
-        }
-        cat("\nNormality Test (Shapiro-Wilk):\n")
-        if (!is.na(drs_shapiro_mean$p.value)) {
-          cat(sprintf("  W statistic: %.4f\n", drs_shapiro_mean$statistic))
-          cat(sprintf(
-            "  p-value:     %.4f %s\n",
-            drs_shapiro_mean$p.value,
-            ifelse(
-              drs_shapiro_mean$p.value < 0.05,
-              "(reject normality at 0.05 level)",
-              "(fail to reject normality)"
-            )
-          ))
-        } else {
-          cat("  Test failed (likely due to sample size or other issues)\n")
-        }
-
-        # DRS Median results
-        cat("\n=== DRS Results (Median Aggregation) ===\n")
-        cat(sprintf("ATT estimate:     %.4f\n", drs_point_att_median))
-        cat(sprintf("Standard error:   %.4f\n", drs_se_median))
-        cat(sprintf("p-value:          %.4f\n", drs_pval_median))
-        cat("\nConfidence Intervals (95%):\n")
-        if (!is.null(drs_ci_normal_median)) {
-          cat(sprintf(
-            "  Normal:      [%.4f, %.4f]\n",
-            drs_ci_normal_median[1],
-            drs_ci_normal_median[2]
-          ))
-        }
-        if (!is.null(drs_ci_basic_median)) {
-          cat(sprintf(
-            "  Basic:       [%.4f, %.4f]\n",
-            drs_ci_basic_median[1],
-            drs_ci_basic_median[2]
-          ))
-        }
-        if (!is.null(drs_ci_percentile_median)) {
-          cat(sprintf(
-            "  Percentile:  [%.4f, %.4f]\n",
-            drs_ci_percentile_median[1],
-            drs_ci_percentile_median[2]
-          ))
-        }
-        cat("\nNormality Test (Shapiro-Wilk):\n")
-        if (!is.na(drs_shapiro_median$p.value)) {
-          cat(sprintf("  W statistic: %.4f\n", drs_shapiro_median$statistic))
-          cat(sprintf(
-            "  p-value:     %.4f %s\n",
-            drs_shapiro_median$p.value,
-            ifelse(
-              drs_shapiro_median$p.value < 0.05,
-              "(reject normality at 0.05 level)",
-              "(fail to reject normality)"
-            )
-          ))
-        } else {
-          cat("  Test failed (likely due to sample size or other issues)\n")
-        }
-      }
+    # Display Shapiro-Wilk test results for DRS
+    cat("\nNormality Test (Shapiro-Wilk):\n")
+    if (!is.na(drs_shapiro$p.value)) {
+      cat(sprintf(
+        "  W statistic: %.4f\n",
+        drs_shapiro$statistic
+      ))
+      cat(sprintf(
+        "  p-value:     %.4f %s\n",
+        drs_shapiro$p.value,
+        ifelse(
+          drs_shapiro$p.value < 0.05,
+          "(reject normality at 0.05 level)",
+          "(fail to reject normality)"
+        )
+      ))
     } else {
-      # Standard case: print single set of results for each estimator
-
-      if (estimator %in% c("all", "drw")) {
-        cat("\n=== DRW Results ===\n")
-        cat(sprintf("ATT estimate:     %.4f\n", drw_point_att))
-        cat(sprintf("Standard error:   %.4f\n", drw_se))
-        cat(sprintf("p-value:          %.4f\n", drw_pval))
-        cat("\nConfidence Intervals (95%):\n")
-        if (!is.null(drw_ci_normal)) {
-          cat(sprintf(
-            "  Normal:      [%.4f, %.4f]\n",
-            drw_ci_normal[1],
-            drw_ci_normal[2]
-          ))
-        }
-        if (!is.null(drw_ci_basic)) {
-          cat(sprintf(
-            "  Basic:       [%.4f, %.4f]\n",
-            drw_ci_basic[1],
-            drw_ci_basic[2]
-          ))
-        }
-        if (!is.null(drw_ci_percentile)) {
-          cat(sprintf(
-            "  Percentile:  [%.4f, %.4f]\n",
-            drw_ci_percentile[1],
-            drw_ci_percentile[2]
-          ))
-        }
-
-        # Display Shapiro-Wilk test results for DRW
-        cat("\nNormality Test (Shapiro-Wilk):\n")
-        if (!is.na(drw_shapiro$p.value)) {
-          cat(sprintf(
-            "  W statistic: %.4f\n",
-            drw_shapiro$statistic
-          ))
-          cat(sprintf(
-            "  p-value:     %.4f %s\n",
-            drw_shapiro$p.value,
-            ifelse(
-              drw_shapiro$p.value < 0.05,
-              "(reject normality at 0.05 level)",
-              "(fail to reject normality)"
-            )
-          ))
-        } else {
-          cat("  Test failed (likely due to sample size or other issues)\n")
-        }
-      }
-
-      if (estimator %in% c("all", "drs")) {
-        cat("\n=== DRS Results ===\n")
-        cat(sprintf("ATT estimate:     %.4f\n", drs_point_att))
-        cat(sprintf("Standard error:   %.4f\n", drs_se))
-        cat(sprintf("p-value:          %.4f\n", drs_pval))
-        cat("\nConfidence Intervals (95%):\n")
-        if (!is.null(drs_ci_normal)) {
-          cat(sprintf(
-            "  Normal:      [%.4f, %.4f]\n",
-            drs_ci_normal[1],
-            drs_ci_normal[2]
-          ))
-        }
-        if (!is.null(drs_ci_basic)) {
-          cat(sprintf(
-            "  Basic:       [%.4f, %.4f]\n",
-            drs_ci_basic[1],
-            drs_ci_basic[2]
-          ))
-        }
-        if (!is.null(drs_ci_percentile)) {
-          cat(sprintf(
-            "  Percentile:  [%.4f, %.4f]\n",
-            drs_ci_percentile[1],
-            drs_ci_percentile[2]
-          ))
-        }
-
-        # Display Shapiro-Wilk test results for DRS
-        cat("\nNormality Test (Shapiro-Wilk):\n")
-        if (!is.na(drs_shapiro$p.value)) {
-          cat(sprintf(
-            "  W statistic: %.4f\n",
-            drs_shapiro$statistic
-          ))
-          cat(sprintf(
-            "  p-value:     %.4f %s\n",
-            drs_shapiro$p.value,
-            ifelse(
-              drs_shapiro$p.value < 0.05,
-              "(reject normality at 0.05 level)",
-              "(fail to reject normality)"
-            )
-          ))
-        } else {
-          cat("  Test failed (likely due to sample size or other issues)\n")
-        }
-      }
+      cat("  Test failed (likely due to sample size or other issues)\n")
     }
 
     # Display balance diagnostics if available
@@ -2942,165 +1094,26 @@ DR_att = function(
     }
   }
 
-  # Generate diagnostic plots
-  if (
-    plot_diagnostics &&
-      (estimator %in% c("all", "drw") || estimator %in% c("all", "drs"))
-  ) {
-    if (use_all_aggregation) {
-      # When aggregation = "all", create plots for all 4 estimators
-      # Layout: 4 rows x 2 columns (histogram and QQ-plot for each)
+  # Generate diagnostic plots for DRS
+  if (plot_diagnostics) {
+    par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
 
-      # Determine number of rows based on which estimators to plot
-      n_estimators = 0
-      if (estimator %in% c("all", "drw")) {
-        n_estimators = n_estimators + 2
-      } # drw_mean, drw_median
-      if (estimator %in% c("all", "drs")) {
-        n_estimators = n_estimators + 2
-      } # drs_mean, drs_median
+    # DRS histogram
+    hist(
+      drs_boots,
+      main = "DRS Bootstrap Distribution",
+      xlab = "ATT Estimate",
+      col = "lightgreen",
+      border = "white",
+      breaks = 30
+    )
+    abline(v = drs_point_att, col = "red", lwd = 2, lty = 2)
 
-      par(mfrow = c(n_estimators, 2), mar = c(4, 4, 2, 1))
+    # DRS QQ-plot
+    qqnorm(drs_boots, main = "DRS Q-Q Plot")
+    qqline(drs_boots, col = "red", lwd = 2)
 
-      # DRW Mean plots
-      if (estimator %in% c("all", "drw")) {
-        # DRW Mean histogram
-        hist(
-          drw_boots_mean,
-          main = sprintf(
-            "DRW-Mean Bootstrap Distribution (%s%s)",
-            aggregation,
-            if (cross_fitting) paste0(", CF k=", k) else ""
-          ),
-          xlab = "ATT Estimate",
-          col = "lightblue",
-          border = "white",
-          breaks = 30
-        )
-        abline(v = drw_point_att_mean, col = "red", lwd = 2, lty = 2)
-
-        # DRW Mean QQ-plot
-        qqnorm(drw_boots_mean, main = "DRW Mean Q-Q Plot")
-        qqline(drw_boots_mean, col = "red", lwd = 2)
-
-        # DRW Median histogram
-        hist(
-          drw_boots_median,
-          main = sprintf(
-            "DRW-Median Bootstrap Distribution (%s%s)",
-            aggregation,
-            if (cross_fitting) paste0(", CF k=", k) else ""
-          ),
-          xlab = "ATT Estimate",
-          col = "lightblue",
-          border = "white",
-          breaks = 30
-        )
-        abline(v = drw_point_att_median, col = "red", lwd = 2, lty = 2)
-
-        # DRW Median QQ-plot
-        qqnorm(drw_boots_median, main = "DRW Median Q-Q Plot")
-        qqline(drw_boots_median, col = "red", lwd = 2)
-      }
-
-      # DRS Mean plots
-      if (estimator %in% c("all", "drs")) {
-        # DRS Mean histogram
-        hist(
-          drs_boots_mean,
-          main = sprintf(
-            "DRS-Mean Bootstrap Distribution (%s%s)",
-            aggregation,
-            if (cross_fitting) paste0(", CF k=", k) else ""
-          ),
-          xlab = "ATT Estimate",
-          col = "lightgreen",
-          border = "white",
-          breaks = 30
-        )
-        abline(v = drs_point_att_mean, col = "red", lwd = 2, lty = 2)
-
-        # DRS Mean QQ-plot
-        qqnorm(drs_boots_mean, main = "DRS Mean Q-Q Plot")
-        qqline(drs_boots_mean, col = "red", lwd = 2)
-
-        # DRS Median histogram
-        hist(
-          drs_boots_median,
-          main = sprintf(
-            "DRS-Median Bootstrap Distribution (%s%s)",
-            aggregation,
-            if (cross_fitting) paste0(", CF k=", k) else ""
-          ),
-          xlab = "ATT Estimate",
-          col = "lightgreen",
-          border = "white",
-          breaks = 30
-        )
-        abline(v = drs_point_att_median, col = "red", lwd = 2, lty = 2)
-
-        # DRS Median QQ-plot
-        qqnorm(drs_boots_median, main = "DRS Median Q-Q Plot")
-        qqline(drs_boots_median, col = "red", lwd = 2)
-      }
-
-      par(mfrow = c(1, 1))
-    } else {
-      # Standard case: plots for single aggregation method
-
-      # Determine plot layout based on estimator
-      if (estimator == "all") {
-        par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
-      } else {
-        par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
-      }
-
-      # DRW plots
-      if (estimator %in% c("all", "drw")) {
-        # DRW histogram
-        hist(
-          drw_boots,
-          main = sprintf(
-            "DRW Bootstrap Distribution (%s%s)",
-            aggregation,
-            if (cross_fitting) paste0(", CF k=", k) else ""
-          ),
-          xlab = "ATT Estimate",
-          col = "lightblue",
-          border = "white",
-          breaks = 30
-        )
-        abline(v = drw_point_att, col = "red", lwd = 2, lty = 2)
-
-        # DRW QQ-plot
-        qqnorm(drw_boots, main = "DRW Q-Q Plot")
-        qqline(drw_boots, col = "red", lwd = 2)
-      }
-
-      # DRS plots
-      if (estimator %in% c("all", "drs")) {
-        # DRS histogram
-        hist(
-          drs_boots,
-          main = sprintf(
-            "DRS Bootstrap Distribution (%s%s)",
-            aggregation,
-            if (cross_fitting) paste0(", CF k=", k) else ""
-          ),
-          xlab = "ATT Estimate",
-          col = "lightgreen",
-          border = "white",
-          breaks = 30
-        )
-        abline(v = drs_point_att, col = "red", lwd = 2, lty = 2)
-
-        # DRS QQ-plot
-        qqnorm(drs_boots, main = "DRS Q-Q Plot")
-        qqline(drs_boots, col = "red", lwd = 2)
-      }
-
-      par(mfrow = c(1, 1))
-    }
+    par(mfrow = c(1, 1))
 
     # Save to file if save_to is specified
     if (!is.null(save_to)) {
@@ -3111,12 +1124,10 @@ DR_att = function(
 
       # Construct filename
       filename = sprintf(
-        "DR_bootstrap_%s_vs_%s_%s_%s%s%s_n%d.png",
+        "DR_bootstrap_%s_vs_%s_%s%s_n%d.png",
         treated_level,
         control_level,
-        aggregation,
         sim,
-        if (cross_fitting) paste0("_CF", k) else "",
         if (alpha > 0) paste0("_alpha", alpha) else "",
         n_boot
       )
@@ -3125,160 +1136,24 @@ DR_att = function(
       # Open high-resolution PNG device for academic paper quality
       png(filepath, width = 3000, height = 3000, res = 300)
 
-      if (use_all_aggregation) {
-        # When aggregation = "all", create plots for all 4 estimators
-        # Layout: 4 rows x 2 columns (histogram and QQ-plot for each)
+      par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
 
-        # Determine number of rows based on which estimators to plot
-        n_estimators = 0
-        if (estimator %in% c("all", "drw")) {
-          n_estimators = n_estimators + 2
-        } # drw_mean, drw_median
-        if (estimator %in% c("all", "drs")) {
-          n_estimators = n_estimators + 2
-        } # drs_mean, drs_median
+      # DRS histogram
+      hist(
+        drs_boots,
+        main = "DRS Bootstrap Distribution",
+        xlab = "ATT Estimate",
+        col = "lightgreen",
+        border = "white",
+        breaks = 30
+      )
+      abline(v = drs_point_att, col = "red", lwd = 2, lty = 2)
 
-        par(mfrow = c(n_estimators, 2), mar = c(4, 4, 2, 1))
+      # DRS QQ-plot
+      qqnorm(drs_boots, main = "DRS Q-Q Plot")
+      qqline(drs_boots, col = "red", lwd = 2)
 
-        # DRW Mean plots
-        if (estimator %in% c("all", "drw")) {
-          # DRW Mean histogram
-          hist(
-            drw_boots_mean,
-            main = sprintf(
-              "DRW-Mean Bootstrap Distribution (%s%s)",
-              aggregation,
-              if (cross_fitting) paste0(", CF k=", k) else ""
-            ),
-            xlab = "ATT Estimate",
-            col = "lightblue",
-            border = "white",
-            breaks = 30
-          )
-          abline(v = drw_point_att_mean, col = "red", lwd = 2, lty = 2)
-
-          # DRW Mean QQ-plot
-          qqnorm(drw_boots_mean, main = "DRW Mean Q-Q Plot")
-          qqline(drw_boots_mean, col = "red", lwd = 2)
-
-          # DRW Median histogram
-          hist(
-            drw_boots_median,
-            main = sprintf(
-              "DRW-Median Bootstrap Distribution (%s%s)",
-              aggregation,
-              if (cross_fitting) paste0(", CF k=", k) else ""
-            ),
-            xlab = "ATT Estimate",
-            col = "lightblue",
-            border = "white",
-            breaks = 30
-          )
-          abline(v = drw_point_att_median, col = "red", lwd = 2, lty = 2)
-
-          # DRW Median QQ-plot
-          qqnorm(drw_boots_median, main = "DRW Median Q-Q Plot")
-          qqline(drw_boots_median, col = "red", lwd = 2)
-        }
-
-        # DRS Mean plots
-        if (estimator %in% c("all", "drs")) {
-          # DRS Mean histogram
-          hist(
-            drs_boots_mean,
-            main = sprintf(
-              "DRS-Mean Bootstrap Distribution (%s%s)",
-              aggregation,
-              if (cross_fitting) paste0(", CF k=", k) else ""
-            ),
-            xlab = "ATT Estimate",
-            col = "lightgreen",
-            border = "white",
-            breaks = 30
-          )
-          abline(v = drs_point_att_mean, col = "red", lwd = 2, lty = 2)
-
-          # DRS Mean QQ-plot
-          qqnorm(drs_boots_mean, main = "DRS Mean Q-Q Plot")
-          qqline(drs_boots_mean, col = "red", lwd = 2)
-
-          # DRS Median histogram
-          hist(
-            drs_boots_median,
-            main = sprintf(
-              "DRS-Median Bootstrap Distribution (%s%s)",
-              aggregation,
-              if (cross_fitting) paste0(", CF k=", k) else ""
-            ),
-            xlab = "ATT Estimate",
-            col = "lightgreen",
-            border = "white",
-            breaks = 30
-          )
-          abline(v = drs_point_att_median, col = "red", lwd = 2, lty = 2)
-
-          # DRS Median QQ-plot
-          qqnorm(drs_boots_median, main = "DRS Median Q-Q Plot")
-          qqline(drs_boots_median, col = "red", lwd = 2)
-        }
-
-        par(mfrow = c(1, 1))
-      } else {
-        # Standard case: plots for single aggregation method
-
-        # Determine plot layout based on estimator
-        if (estimator == "all") {
-          par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
-        } else {
-          par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
-        }
-
-        # DRW plots
-        if (estimator %in% c("all", "drw")) {
-          # DRW histogram
-          hist(
-            drw_boots,
-            main = sprintf(
-              "DRW Bootstrap Distribution (%s%s)",
-              aggregation,
-              if (cross_fitting) paste0(", CF k=", k) else ""
-            ),
-            xlab = "ATT Estimate",
-            col = "lightblue",
-            border = "white",
-            breaks = 30
-          )
-          abline(v = drw_point_att, col = "red", lwd = 2, lty = 2)
-
-          # DRW QQ-plot
-          qqnorm(drw_boots, main = "DRW Q-Q Plot")
-          qqline(drw_boots, col = "red", lwd = 2)
-        }
-
-        # DRS plots
-        if (estimator %in% c("all", "drs")) {
-          # DRS histogram
-          hist(
-            drs_boots,
-            main = sprintf(
-              "DRS Bootstrap Distribution (%s%s)",
-              aggregation,
-              if (cross_fitting) paste0(", CF k=", k) else ""
-            ),
-            xlab = "ATT Estimate",
-            col = "lightgreen",
-            border = "white",
-            breaks = 30
-          )
-          abline(v = drs_point_att, col = "red", lwd = 2, lty = 2)
-
-          # DRS QQ-plot
-          qqnorm(drs_boots, main = "DRS Q-Q Plot")
-          qqline(drs_boots, col = "red", lwd = 2)
-        }
-
-        par(mfrow = c(1, 1))
-      }
+      par(mfrow = c(1, 1))
 
       dev.off()
       if (verbose) {
@@ -3291,7 +1166,7 @@ DR_att = function(
   balance_diagnostics = NULL
   bootstrap_balance = NULL
 
-  if (!is.null(avg_asd_boots)) {
+  if (!is.null(avg_asd_boots) && length(avg_asd_boots) > 0) {
     balance_diagnostics = list(
       avg_asd = list(
         mean = mean(avg_asd_boots, na.rm = TRUE),
@@ -3314,7 +1189,7 @@ DR_att = function(
     )
 
     bootstrap_balance = data.frame(
-      iteration = 1:length(avg_asd_boots),
+      iteration = seq_len(length(avg_asd_boots)),
       avg_asd = avg_asd_boots,
       max_asd = max_asd_boots,
       ess = ess_boots
@@ -3322,147 +1197,47 @@ DR_att = function(
   }
 
   # Return results
-  results = list()
-
-  if (use_all_aggregation) {
-    # When aggregation = "all", return nested structure with mean and median results
-
-    # Add DRW results if computed
-    if (estimator %in% c("all", "drw")) {
-      results$drw = list(
-        mean = list(
-          att = drw_point_att_mean,
-          se = drw_se_mean,
-          ci_normal = drw_ci_normal_mean,
-          ci_basic = drw_ci_basic_mean,
-          ci_percentile = drw_ci_percentile_mean,
-          pval = drw_pval_mean,
-          bootstrap_samples = drw_boots_mean,
-          boot_ci_object = drw_ci_mean,
-          shapiro_test = drw_shapiro_mean
-        ),
-        median = list(
-          att = drw_point_att_median,
-          se = drw_se_median,
-          ci_normal = drw_ci_normal_median,
-          ci_basic = drw_ci_basic_median,
-          ci_percentile = drw_ci_percentile_median,
-          pval = drw_pval_median,
-          bootstrap_samples = drw_boots_median,
-          boot_ci_object = drw_ci_median,
-          shapiro_test = drw_shapiro_median
-        )
-      )
-    }
-
-    # Add DRS results if computed
-    if (estimator %in% c("all", "drs")) {
-      results$drs = list(
-        mean = list(
-          att = drs_point_att_mean,
-          se = drs_se_mean,
-          ci_normal = drs_ci_normal_mean,
-          ci_basic = drs_ci_basic_mean,
-          ci_percentile = drs_ci_percentile_mean,
-          pval = drs_pval_mean,
-          bootstrap_samples = drs_boots_mean,
-          boot_ci_object = drs_ci_mean,
-          shapiro_test = drs_shapiro_mean
-        ),
-        median = list(
-          att = drs_point_att_median,
-          se = drs_se_median,
-          ci_normal = drs_ci_normal_median,
-          ci_basic = drs_ci_basic_median,
-          ci_percentile = drs_ci_percentile_median,
-          pval = drs_pval_median,
-          bootstrap_samples = drs_boots_median,
-          boot_ci_object = drs_ci_median,
-          shapiro_test = drs_shapiro_median
-        )
-      )
-    }
-
-    # Add common results
-    results$n_boot = if (estimator %in% c("all", "drw")) {
-      length(drw_boots_mean)
-    } else {
-      length(drs_boots_mean)
-    }
-  } else {
-    # Standard case: flat structure for single aggregation method
-
-    # Add DRW results if computed
-    if (estimator %in% c("all", "drw")) {
-      results$drw = list(
-        att = drw_point_att,
-        se = drw_se,
-        ci_normal = drw_ci_normal,
-        ci_basic = drw_ci_basic,
-        ci_percentile = drw_ci_percentile,
-        pval = drw_pval,
-        bootstrap_samples = drw_boots,
-        boot_ci_object = drw_ci,
-        shapiro_test = drw_shapiro
-      )
-    }
-
-    # Add DRS results if computed
-    if (estimator %in% c("all", "drs")) {
-      results$drs = list(
-        att = drs_point_att,
-        se = drs_se,
-        ci_normal = drs_ci_normal,
-        ci_basic = drs_ci_basic,
-        ci_percentile = drs_ci_percentile,
-        pval = drs_pval,
-        bootstrap_samples = drs_boots,
-        boot_ci_object = drs_ci,
-        shapiro_test = drs_shapiro
-      )
-    }
-
-    # Add common results
-    results$n_boot = if (estimator %in% c("all", "drw")) {
-      length(drw_boots)
-    } else {
-      length(drs_boots)
-    }
-  }
-
-  results$n_failed = n_failed
-  results$balance_diagnostics = balance_diagnostics
-  results$bootstrap_balance = bootstrap_balance
-  results$boot_object = boot_result
+  results = list(
+    drs = list(
+      att = drs_point_att,
+      se = drs_se,
+      ci_normal = drs_ci_normal,
+      ci_basic = drs_ci_basic,
+      ci_percentile = drs_ci_percentile,
+      pval = drs_pval,
+      bootstrap_samples = drs_boots,
+      boot_ci_object = drs_ci,
+      shapiro_test = drs_shapiro
+    ),
+    n_boot = length(drs_boots),
+    n_failed = n_failed,
+    balance_diagnostics = balance_diagnostics,
+    bootstrap_balance = bootstrap_balance,
+    boot_object = boot_result
+  )
 
   return(results)
 }
 
+
 # NEW HELPER FUNCTIONS FOR DEFINITIVE ANALYSIS -----------------------------------------####
 
 build_result_path = function(
-  estimator,
   comparison,
-  k,
   model,
-  base = "results/outcome"
+  base = "results/outcome/DRS"
 ) {
-  #' Build consistent directory path for analysis results
+  #' Build consistent directory path for DRS analysis results
   #'
-  #' @param estimator character - "drw" or "drs"
   #' @param comparison character - "inc_dec" or "inc_mix"
-  #' @param k integer - number of folds (1 = no cross-fitting)
   #' @param model integer - model number (1-4)
-  #' @param base character - base directory path
+  #' @param base character - base directory path (defaults to DRS folder)
   #'
   #' @return character - full path to results directory (created if doesn't exist)
 
-  cf_suffix = if (k == 1) "nocf" else "cf"
   path = file.path(
     base,
-    toupper(estimator),
     comparison,
-    sprintf("k%d_%s", k, cf_suffix),
     sprintf("model%d", model)
   )
   dir.create(path, showWarnings = FALSE, recursive = TRUE)
@@ -3470,10 +1245,10 @@ build_result_path = function(
 }
 
 build_master_summary = function(results_list, estimator_name, comparison_name) {
-  #' Build comprehensive summary table from multiple analysis results
+  #' Build comprehensive summary table from multiple DRS analysis results
   #'
-  #' @param results_list named list - analysis results, names should indicate k and model
-  #' @param estimator_name character - "DRW" or "DRS"
+  #' @param results_list named list - analysis results, names should indicate model
+  #' @param estimator_name character - "DRS" (kept for consistency)
   #' @param comparison_name character - "inc_dec" or "inc_mix"
   #'
   #' @return data.frame - comprehensive summary with all analyses
@@ -3483,13 +1258,10 @@ build_master_summary = function(results_list, estimator_name, comparison_name) {
   for (result_name in names(results_list)) {
     result = results_list[[result_name]]
 
-    # Extract k and model from name (e.g., "k2_model3")
-    parts = strsplit(result_name, "_")[[1]]
-    k_value = as.integer(sub("k", "", parts[1]))
-    model_num = as.integer(sub("model", "", parts[2]))
-    cf_status = if (k_value == 1) "No" else sprintf("Yes (k=%d)", k_value)
+    # Extract model from name (e.g., "model1", "model2", etc.)
+    model_num = as.integer(sub("model", "", result_name))
 
-    # Extract results for the specified estimator
+    # Extract DRS results
     est_lower = tolower(estimator_name)
     if (!est_lower %in% names(result)) {
       warning(sprintf(
@@ -3502,71 +1274,54 @@ build_master_summary = function(results_list, estimator_name, comparison_name) {
 
     est = result[[est_lower]]
 
-    # Detect if nested structure (aggregation="all" was used)
-    is_nested = !is.null(est$mean) && !is.null(est$median)
+    # Build row from DRS results (no nested structure handling)
+    row = data.frame(
+      Estimator = estimator_name,
+      Comparison = comparison_name,
+      Model = model_num,
+      ATT = est$att,
+      SE = est$se,
+      CI_Normal_Lower = est$ci_normal[1],
+      CI_Normal_Upper = est$ci_normal[2],
+      CI_Basic_Lower = ifelse(
+        !is.null(est$ci_basic),
+        est$ci_basic[1],
+        NA
+      ),
+      CI_Basic_Upper = ifelse(
+        !is.null(est$ci_basic),
+        est$ci_basic[2],
+        NA
+      ),
+      CI_Perc_Lower = est$ci_percentile[1],
+      CI_Perc_Upper = est$ci_percentile[2],
+      p_value = est$pval,
+      Shapiro_W = ifelse(
+        !is.null(est$shapiro_test),
+        est$shapiro_test$statistic,
+        NA
+      ),
+      Shapiro_p = ifelse(
+        !is.null(est$shapiro_test),
+        est$shapiro_test$p.value,
+        NA
+      ),
+      n_boot = result$n_boot,
+      n_failed = result$n_failed,
+      stringsAsFactors = FALSE
+    )
 
-    # Function to build a single row from estimator results
-    build_row = function(est_data, aggregation_type = "mean") {
-      row = data.frame(
-        Estimator = estimator_name,
-        Comparison = comparison_name,
-        K_Fold = k_value,
-        Cross_Fitting = cf_status,
-        Model = model_num,
-        Aggregation = aggregation_type,
-        ATT = est_data$att,
-        SE = est_data$se,
-        CI_Normal_Lower = est_data$ci_normal[1],
-        CI_Normal_Upper = est_data$ci_normal[2],
-        CI_Basic_Lower = ifelse(
-          !is.null(est_data$ci_basic),
-          est_data$ci_basic[1],
-          NA
-        ),
-        CI_Basic_Upper = ifelse(
-          !is.null(est_data$ci_basic),
-          est_data$ci_basic[2],
-          NA
-        ),
-        CI_Perc_Lower = est_data$ci_percentile[1],
-        CI_Perc_Upper = est_data$ci_percentile[2],
-        p_value = est_data$pval,
-        Shapiro_W = ifelse(
-          !is.null(est_data$shapiro_test),
-          est_data$shapiro_test$statistic,
-          NA
-        ),
-        Shapiro_p = ifelse(
-          !is.null(est_data$shapiro_test),
-          est_data$shapiro_test$p.value,
-          NA
-        ),
-        n_boot = result$n_boot,
-        n_failed = result$n_failed,
-        stringsAsFactors = FALSE
-      )
-
-      # Add balance diagnostics if available
-      if (!is.null(result$balance_diagnostics)) {
-        row$Avg_ASD_Mean = result$balance_diagnostics$avg_asd$mean
-        row$Avg_ASD_SD = result$balance_diagnostics$avg_asd$sd
-        row$Max_ASD_Mean = result$balance_diagnostics$max_asd$mean
-        row$Max_ASD_SD = result$balance_diagnostics$max_asd$sd
-        row$ESS_Mean = result$balance_diagnostics$ess$mean
-        row$ESS_SD = result$balance_diagnostics$ess$sd
-      }
-
-      return(row)
+    # Add balance diagnostics if available
+    if (!is.null(result$balance_diagnostics)) {
+      row$Avg_ASD_Mean = result$balance_diagnostics$avg_asd$mean
+      row$Avg_ASD_SD = result$balance_diagnostics$avg_asd$sd
+      row$Max_ASD_Mean = result$balance_diagnostics$max_asd$mean
+      row$Max_ASD_SD = result$balance_diagnostics$max_asd$sd
+      row$ESS_Mean = result$balance_diagnostics$ess$mean
+      row$ESS_SD = result$balance_diagnostics$ess$sd
     }
 
-    if (is_nested) {
-      # Nested structure: create 2 rows (one for mean, one for median)
-      summary_rows[[length(summary_rows) + 1]] = build_row(est$mean, "mean")
-      summary_rows[[length(summary_rows) + 1]] = build_row(est$median, "median")
-    } else {
-      # Flat structure: create 1 row with aggregation = "mean" for backward compat
-      summary_rows[[length(summary_rows) + 1]] = build_row(est, "mean")
-    }
+    summary_rows[[length(summary_rows) + 1]] = row
   }
 
   if (length(summary_rows) == 0) {
@@ -3579,27 +1334,23 @@ build_master_summary = function(results_list, estimator_name, comparison_name) {
   return(summary_df)
 }
 
-plot_kfold_comparison = function(
-  results_k1,
-  results_k2,
-  results_k3,
+
+# OUTCOME MODEL COMPARISON PLOT --------------------------------------------------------####
+plot_outcome_model_boxplot = function(
+  results_list,
   estimator_name,
   comparison_label,
   save_path,
-  aggregation = "mean",
-  width = 3000,
-  height = 2000,
+  width = 2400,
+  height = 1800,
   res = 300
 ) {
-  #' Create comparison plot of bootstrap distributions across k-fold values
+  #' Create boxplot comparison of DRS ATT estimates across 4 outcome models
   #'
-  #' @param results_k1 list - results for k=1 (model1, model2, model3, model4)
-  #' @param results_k2 list - results for k=2
-  #' @param results_k3 list - results for k=3
-  #' @param estimator_name character - "drw" or "drs"
+  #' @param results_list named list - results for model1, model2, model3, model4
+  #' @param estimator_name character - "DRS" (kept for consistency)
   #' @param comparison_label character - label for plot title
   #' @param save_path character - path to save PNG file
-  #' @param aggregation character - aggregation method to use ("mean" or "median"), defaults to "mean"
   #' @param width numeric - plot width in pixels
   #' @param height numeric - plot height in pixels
   #' @param res numeric - resolution in DPI
@@ -3608,94 +1359,66 @@ plot_kfold_comparison = function(
 
   est = tolower(estimator_name)
 
-  # Helper function to extract data from potentially nested structure
-  extract_data = function(x, field) {
-    est_data = x[[est]]
-    # Check if nested structure (aggregation="all" was used)
-    if (!is.null(est_data$mean) && !is.null(est_data$median)) {
-      # Nested: use specified aggregation
-      return(est_data[[aggregation]][[field]])
-    } else {
-      # Flat: use direct access
-      return(est_data[[field]])
-    }
+  # Helper function to extract bootstrap samples (no nested structure)
+  extract_boots = function(x) {
+    x[[est]]$bootstrap_samples
   }
 
-  # Extract bootstrap samples for each k and model
-  all_samples = list(
-    k1 = lapply(results_k1, function(x) extract_data(x, "bootstrap_samples")),
-    k2 = lapply(results_k2, function(x) extract_data(x, "bootstrap_samples")),
-    k3 = lapply(results_k3, function(x) extract_data(x, "bootstrap_samples"))
-  )
+  # Helper function to extract point estimates (no nested structure)
+  extract_att = function(x) {
+    x[[est]]$att
+  }
 
-  # Extract point estimates
-  all_estimates = list(
-    k1 = sapply(results_k1, function(x) extract_data(x, "att")),
-    k2 = sapply(results_k2, function(x) extract_data(x, "att")),
-    k3 = sapply(results_k3, function(x) extract_data(x, "att"))
+  # Extract data for all 4 models
+  model_names = paste0("model", 1:4)
+  bootstrap_data = lapply(model_names, function(m) extract_boots(results_list[[m]]))
+  point_estimates = sapply(model_names, function(m) extract_att(results_list[[m]]))
+
+  # Model labels
+  model_labels = c(
+    "Model 1:\nIntercept",
+    "Model 2:\nBaseline",
+    "Model 3:\n+Depression",
+    "Model 4:\nFull Model"
   )
 
   # Create plot function
   create_plot = function() {
-    par(mfrow = c(1, 4), mar = c(4, 4, 3, 1))
+    par(mar = c(5, 5, 4, 2))
 
-    colors = c("blue", "red", "darkgreen")
-    k_labels = c("k=1 (No CF)", "k=2", "k=3")
-
-    for (model in 1:4) {
-      # Calculate densities
-      dens_k1 = density(all_samples$k1[[model]])
-      dens_k2 = density(all_samples$k2[[model]])
-      dens_k3 = density(all_samples$k3[[model]])
-
-      # Get x and y limits
-      xlim = range(c(
-        all_samples$k1[[model]],
-        all_samples$k2[[model]],
-        all_samples$k3[[model]]
-      ))
-      ylim = c(0, max(c(dens_k1$y, dens_k2$y, dens_k3$y)) * 1.05)
-
-      # Plot
-      plot(
-        dens_k1,
-        main = sprintf("Model %d\n%s", model, toupper(estimator_name)),
-        xlab = "ATT",
-        ylab = "Density",
-        col = colors[1],
-        lwd = 2,
-        xlim = xlim,
-        ylim = ylim
-      )
-      lines(dens_k2, col = colors[2], lwd = 2)
-      lines(dens_k3, col = colors[3], lwd = 2)
-
-      # Add vertical lines at point estimates
-      abline(v = all_estimates$k1[model], col = colors[1], lty = 2)
-      abline(v = all_estimates$k2[model], col = colors[2], lty = 2)
-      abline(v = all_estimates$k3[model], col = colors[3], lty = 2)
-
-      # Add legend only to first panel
-      if (model == 1) {
-        legend(
-          "topleft",
-          legend = k_labels,
-          col = colors,
-          lwd = 2,
-          cex = 0.7
-        )
-      }
-    }
-
-    # Add overall title
-    mtext(
-      sprintf("%s - %s", comparison_label, toupper(estimator_name)),
-      side = 3,
-      line = -1,
-      outer = TRUE
+    # Create boxplot
+    boxplot(
+      bootstrap_data,
+      names = model_labels,
+      main = sprintf("%s - %s", comparison_label, toupper(estimator_name)),
+      xlab = "Outcome Model",
+      ylab = "ATT Estimate",
+      col = "lightblue",
+      border = "darkblue",
+      outline = TRUE,
+      las = 1
     )
 
-    par(mfrow = c(1, 1))
+    # Add horizontal line at zero
+    abline(h = 0, col = "gray60", lty = 2, lwd = 1.5)
+
+    # Overlay point estimates
+    points(1:4, point_estimates, col = "red", pch = 19, cex = 1.5)
+
+    # Add legend
+    legend(
+      "topright",
+      legend = c("Bootstrap Distribution", "Point Estimate", "Zero Reference"),
+      col = c("lightblue", "red", "gray60"),
+      pch = c(15, 19, NA),
+      lty = c(NA, NA, 2),
+      lwd = c(NA, NA, 1.5),
+      cex = 0.9,
+      bg = "white"
+    )
+
+    # Add grid
+    grid(nx = NA, ny = NULL, col = "gray90", lty = 1)
   }
 
   # Display plot
@@ -3709,37 +1432,30 @@ plot_kfold_comparison = function(
   invisible(NULL)
 }
 
+# CF VS NO-CF HISTOGRAM COMPARISON -----------------------------------------------------####
+
 # HELPER X RESULTS ---------------------------------------------------------------------####
 extract_results = function(
   result,
   model_num,
   method,
-  estimator,
-  aggregation = "mean"
+  estimator
 ) {
-  #' Extract results from a potentially nested result structure
+  #' Extract results from DRS result structure
   #'
   #' @param result list - analysis result object
   #' @param model_num integer - model number
   #' @param method character - method name
-  #' @param estimator character - estimator name ("DRW" or "DRS")
-  #' @param aggregation character - aggregation method ("mean" or "median"), defaults to "mean"
+  #' @param estimator character - estimator name ("DRS")
   #'
   #' @return data.frame - extracted results
 
-  est = result[[tolower(estimator)]]
-
-  # Detect if nested structure (aggregation="all" was used)
-  is_nested = !is.null(est$mean) && !is.null(est$median)
-
-  # Select appropriate data based on structure
-  est_data = if (is_nested) est[[aggregation]] else est
+  est_data = result[[tolower(estimator)]]
 
   data.frame(
     Model = model_num,
     Method = method,
     Estimator = estimator,
-    Aggregation = aggregation,
     ATT = est_data$att,
     SE = est_data$se,
     CI_Normal_Lower = est_data$ci_normal[1],
@@ -3790,222 +1506,4 @@ extract_balance = function(result, model_num, method) {
   }
 }
 
-plot_model_comparison = function(
-  results,
-  save_path,
-  width = 3000,
-  height = 2000,
-  res = 300,
-  colors = c("blue", "red", "green", "purple"),
-  ylim_padding = 1.05,
-  drw_title = "DRW: Reweight Method",
-  drs_title = "DRS: Reweight Method"
-) {
-  #' Plot Model Comparison Distributions
-  #'
-  #' Creates a comparison plot of bootstrap distributions for multiple models,
-  #' showing both DRW and DRS methods side by side. Displays the plot and saves to file.
-  #'
-  #' @param results A list of model results, each containing `drw` and `drs`
-  #'   components with `bootstrap_samples`
-  #' @param save_path Path where the plot should be saved (PNG format)
-  #' @param width Plot width in pixels (default: 3000)
-  #' @param height Plot height in pixels (default: 2000)
-  #' @param res Resolution in DPI (default: 300)
-  #' @param colors Vector of colors for each model (default: blue, red, green, purple)
-  #' @param ylim_padding Padding factor for y-axis limit (default: 1.05 for 5% padding)
-  #' @param drw_title Title for DRW panel (default: "DRW: Reweight Method")
-  #' @param drs_title Title for DRS panel (default: "DRS: Reweight Method")
-  #'
-  #' @return NULL (displays plot and saves to file)
 
-  # Extract model names
-  model_names = names(results)
-  n_models = length(model_names)
-
-  # Ensure we have enough colors
-  if (length(colors) < n_models) {
-    colors = rep(colors, length.out = n_models)
-  }
-
-  # === DRW Panel ===
-
-  # Extract all DRW bootstrap samples
-  drw_samples = lapply(results, function(x) {
-    x$drw$bootstrap_samples
-  })
-
-  # Calculate densities
-  drw_densities = lapply(drw_samples, density)
-
-  # Calculate y-axis limit
-  drw_ylim = max(sapply(drw_densities, function(d) max(d$y)))
-
-  # Calculate x-axis limit
-  drw_xlim = range(unlist(drw_samples))
-
-  # === DRS Panel ===
-
-  # Extract all DRS bootstrap samples
-  drs_samples = lapply(results, function(x) {
-    x$drs$bootstrap_samples
-  })
-
-  # Calculate densities
-  drs_densities = lapply(drs_samples, density)
-
-  # Calculate y-axis limit
-  drs_ylim = max(sapply(drs_densities, function(d) max(d$y)))
-
-  # Calculate x-axis limit
-  drs_xlim = range(unlist(drs_samples))
-
-  # Create plot function (used for both display and save)
-  create_plot = function() {
-    par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
-
-    # DRW plot
-    plot(
-      drw_densities[[1]],
-      main = drw_title,
-      xlab = "ATT",
-      col = colors[1],
-      lwd = 2,
-      xlim = drw_xlim,
-      ylim = c(0, drw_ylim * ylim_padding)
-    )
-
-    if (n_models > 1) {
-      for (i in 2:n_models) {
-        lines(drw_densities[[i]], col = colors[i], lwd = 2)
-      }
-    }
-
-    legend(
-      "topleft",
-      legend = paste("Model", 1:n_models),
-      col = colors[1:n_models],
-      lwd = 2,
-      cex = 0.8
-    )
-
-    # DRS plot
-    plot(
-      drs_densities[[1]],
-      main = drs_title,
-      xlab = "ATT",
-      col = colors[1],
-      lwd = 2,
-      xlim = drs_xlim,
-      ylim = c(0, drs_ylim * ylim_padding)
-    )
-
-    if (n_models > 1) {
-      for (i in 2:n_models) {
-        lines(drs_densities[[i]], col = colors[i], lwd = 2)
-      }
-    }
-
-    legend(
-      "topleft",
-      legend = paste("Model", 1:n_models),
-      col = colors[1:n_models],
-      lwd = 2,
-      cex = 0.8
-    )
-
-    par(mfrow = c(1, 1))
-  }
-
-  # Display plot
-  create_plot()
-
-  # Save to file
-  png(save_path, width = width, height = height, res = res)
-  create_plot()
-  dev.off()
-
-  invisible(NULL)
-}
-
-plot_bootstrap_histograms = function(
-  results,
-  save_path,
-  width = 3000,
-  height = 2000,
-  res = 300,
-  ncol_breaks = 30
-) {
-  #' Plot Bootstrap Distribution Histograms for All Models
-  #'
-  #' Creates a 2x4 grid of histograms showing bootstrap distributions for
-  #' DRS (top row) and DRW (bottom row) across 4 models.
-  #' Each histogram shows the distribution with a vertical red dashed line at the point estimate.
-  #'
-  #' @param results A list of model results (model1_reweight, model2_reweight, etc.),
-  #'   each containing `drw` and `drs` components with `bootstrap_samples` and `att`
-  #' @param save_path Path where the plot should be saved (PNG format)
-  #' @param width Plot width in pixels (default: 3000)
-  #' @param height Plot height in pixels (default: 2000)
-  #' @param res Resolution in DPI (default: 300)
-  #' @param ncol_breaks Number of breaks for histograms (default: 30)
-  #'
-  #' @return NULL (displays plot and saves to file)
-
-  # Extract model names and ensure we have 4 models
-  model_names = names(results)
-  if (length(model_names) != 4) {
-    stop("This function requires exactly 4 models")
-  }
-
-  # Create plot function (used for both display and save)
-  create_plot = function() {
-    par(mfrow = c(2, 4), mar = c(4, 4, 3, 1))
-
-    # Top row: DRS
-    for (i in 1:4) {
-      drs_samples = results[[i]]$drs$bootstrap_samples
-      drs_estimate = results[[i]]$drs$att
-
-      hist(
-        drs_samples,
-        breaks = ncol_breaks,
-        col = "lightgreen",
-        border = "black",
-        main = paste0("DRS Model ", i),
-        xlab = "ATT",
-        ylab = "Frequency"
-      )
-      abline(v = drs_estimate, col = "red", lwd = 2, lty = 2)
-    }
-
-    # Bottom row: DRW
-    for (i in 1:4) {
-      drw_samples = results[[i]]$drw$bootstrap_samples
-      drw_estimate = results[[i]]$drw$att
-
-      hist(
-        drw_samples,
-        breaks = ncol_breaks,
-        col = "lightblue",
-        border = "black",
-        main = paste0("DRW Model ", i),
-        xlab = "ATT",
-        ylab = "Frequency"
-      )
-      abline(v = drw_estimate, col = "red", lwd = 2, lty = 2)
-    }
-
-    par(mfrow = c(1, 1))
-  }
-
-  # Display plot
-  create_plot()
-
-  # Save to file
-  png(save_path, width = width, height = height, res = res)
-  create_plot()
-  dev.off()
-
-  invisible(NULL)
-}
