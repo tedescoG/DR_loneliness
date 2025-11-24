@@ -29,20 +29,20 @@ d = readRDS("data/data_clean.rds")
 ps_formula = as.formula(
   remote_contact ~
     female +
-      age_cat +
-      edu +
-      emp_status +
-      income +
-      marital +
-      coliving +
-      health_pre +
-      chronic +
-      death_due_covid +
-      ppl_infected +
-      income_loss +
-      neighborhood +
-      baseline_depr +
-      baseline_lone
+    age_cat +
+    edu +
+    emp_status +
+    income +
+    marital +
+    coliving +
+    health_pre +
+    chronic +
+    death_due_covid +
+    ppl_infected +
+    income_loss +
+    neighborhood +
+    baseline_depr +
+    baseline_lone
 )
 
 
@@ -95,7 +95,7 @@ saveRDS(
 # Convergence plot
 png(
   "results/weighting/inc_dec/convergence_plot.png",
-  width = 8,
+  width = 6,
   height = 6,
   units = "in",
   res = 300
@@ -106,7 +106,7 @@ dev.off()
 # Overlap plot
 png(
   "results/weighting/inc_dec/overlap_plot.png",
-  width = 8,
+  width = 6,
   height = 6,
   units = "in",
   res = 300
@@ -117,7 +117,7 @@ dev.off()
 # Balance plot
 png(
   "results/weighting/inc_dec/balance_plot.png",
-  width = 8,
+  width = 6,
   height = 6,
   units = "in",
   res = 300
@@ -128,7 +128,7 @@ dev.off()
 # Weights plot
 png(
   "results/weighting/inc_dec/weights_plot.png",
-  width = 8,
+  width = 6,
   height = 6,
   units = "in",
   res = 300
@@ -202,7 +202,7 @@ saveRDS(
 # Convergence plot
 png(
   "results/weighting/inc_mix/convergence_plot.png",
-  width = 8,
+  width = 6,
   height = 6,
   units = "in",
   res = 300
@@ -213,7 +213,7 @@ dev.off()
 # Overlap plot
 png(
   "results/weighting/inc_mix/overlap_plot.png",
-  width = 8,
+  width = 6,
   height = 6,
   units = "in",
   res = 300
@@ -224,7 +224,7 @@ dev.off()
 # Balance plot
 png(
   "results/weighting/inc_mix/balance_plot.png",
-  width = 8,
+  width = 6,
   height = 6,
   units = "in",
   res = 300
@@ -235,7 +235,7 @@ dev.off()
 # Weights plot
 png(
   "results/weighting/inc_mix/weights_plot.png",
-  width = 8,
+  width = 6,
   height = 6,
   units = "in",
   res = 300
