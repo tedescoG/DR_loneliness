@@ -23,7 +23,7 @@ d = readRDS("data/data_iptw.rds")
 # =============================================================================
 
 # Bootstrap parameters
-n_boot = 1000
+n_boot = 5000
 n_cores = NULL # Auto-detect
 seed = 123
 stratified = TRUE
