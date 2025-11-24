@@ -1,12 +1,15 @@
-# DRS DOUBLY ROBUST ATT ESTIMATION - SIMPLIFIED ANALYSIS
+# SIMPLE/OR/DRS ATT ESTIMATION - COMPREHENSIVE ANALYSIS
 #
-# This script runs 8 DRS analyses:
+# This script runs 12 analyses:
 # - 2 pairwise comparisons: increase vs decrease, increase vs mix
-# - 4 outcome models: intercept only, baseline loneliness, + depression, full
+# - 6 outcome models:
+#   - Model 0: Simple difference in means (no covariates, no PS weights)
+#   - Model 1: OR with full model (g-computation, no PS weights)
+#   - Models 2-5: DRS with varying complexity (intercept only to full model)
 # - No cross-fitting (k=1)
 # - Stratified bootstrap with reweight method
 #
-# Total: 2 × 4 = 8 analyses
+# Total: 2 × 6 = 12 analyses
 
 # Setup
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -20,7 +23,7 @@ d = readRDS("data/data_iptw.rds")
 # =============================================================================
 
 # Bootstrap parameters
-n_boot = 5000
+n_boot = 10
 n_cores = NULL # Auto-detect
 seed = 123
 stratified = TRUE
@@ -33,49 +36,51 @@ alpha = 0 # NO truncation
 ps_formula = as.formula(
   remote_contact ~
     female +
-      age_cat +
-      edu +
-      emp_status +
-      income +
-      marital +
-      coliving +
-      health_pre +
-      chronic +
-      death_due_covid +
-      ppl_infected +
-      income_loss +
-      neighborhood +
-      baseline_depr +
-      baseline_lone
+    age_cat +
+    edu +
+    emp_status +
+    income +
+    marital +
+    coliving +
+    health_pre +
+    chronic +
+    death_due_covid +
+    ppl_infected +
+    income_loss +
+    neighborhood +
+    baseline_depr +
+    baseline_lone
 )
 
 # Outcome model formulas (character strings for f.out parameter)
 outcome_models = list(
-  model1 = "1", # Intercept only
-  model2 = "baseline_lone", # Baseline loneliness
-  model3 = "baseline_lone + baseline_depr", # Baseline mental health
-  model4 = "baseline_lone + baseline_depr + female + age_cat +
+  model0 = "1", # Placeholder for simple difference (f.out not used)
+  model1 = "baseline_lone + baseline_depr + female + age_cat +
             edu + emp_status + income + marital + coliving +
             health_pre + chronic + death_due_covid +
-            ppl_infected + income_loss + neighborhood" # Full model
+            ppl_infected + income_loss + neighborhood", # Full model for OR (no PS weights)
+  model2 = "1", # Intercept only for DRS
+  model3 = "baseline_lone", # Baseline loneliness for DRS
+  model4 = "baseline_lone + baseline_depr", # Baseline mental health for DRS
+  model5 = "baseline_lone + baseline_depr + female + age_cat +
+            edu + emp_status + income + marital + coliving +
+            health_pre + chronic + death_due_covid +
+            ppl_infected + income_loss + neighborhood" # Full model for DRS
 )
 
 # Outcome model descriptions (for reporting)
 outcome_descriptions = c(
-  "Intercept only",
-  "Baseline loneliness",
-  "Baseline loneliness + depression",
-  "Full covariate adjustment"
+  "Simple: Difference in means",
+  "OR: Full model (no PS weights)",
+  "DRS: Intercept only",
+  "DRS: Baseline loneliness",
+  "DRS: Baseline loneliness + depression",
+  "DRS: Full covariate adjustment"
 )
 
 # =============================================================================
 # COMPARISON 1: INCREASE VS DECREASE
 # =============================================================================
-
-cat("\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
-cat("COMPARISON 1: INCREASE VS DECREASE\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
 
 # Load tuned GBM parameters
 gbm_params_inc_dec = readRDS("results/weighting/inc_dec_params.rds")
@@ -84,11 +89,11 @@ gbm_params_inc_dec = readRDS("results/weighting/inc_dec_params.rds")
 results_inc_dec = list()
 
 # Loop over models
-for (model in 1:4) {
+for (model in 0:5) {
   cat(sprintf(
     "\n>>> Running Model %d: %s\n\n",
     model,
-    outcome_descriptions[model]
+    outcome_descriptions[model + 1]
   ))
 
   # Build result path
@@ -97,6 +102,21 @@ for (model in 1:4) {
     model = model
   )
 
+  # Determine estimator type and weight usage
+  if (model == 0) {
+    # Model 0: Simple difference in means
+    estimator_type = "simple"
+    use_weights = FALSE
+  } else if (model == 1) {
+    # Model 1: Outcome regression without PS weights
+    estimator_type = "or"
+    use_weights = FALSE
+  } else {
+    # Models 2-5: Doubly robust with PS weights
+    estimator_type = "drs"
+    use_weights = TRUE
+  }
+
   # Run analysis
   result = DR_att(
     outcome = "loneliness",
@@ -104,7 +124,7 @@ for (model in 1:4) {
     treated_level = "increase",
     control_level = "decrease",
     f.ps = ps_formula,
-    f.out = outcome_models[[model]],
+    f.out = outcome_models[[model + 1]],
     data = d,
     gbm_params = gbm_params_inc_dec,
     bootstrap_method = "reweight",
@@ -118,7 +138,9 @@ for (model in 1:4) {
     ci_type = ci_type,
     sim = sim,
     save_to = result_path,
-    alpha = alpha
+    alpha = alpha,
+    use_weights = use_weights,
+    estimator = estimator_type
   )
 
   # Store result with informative name
@@ -138,11 +160,6 @@ for (model in 1:4) {
 # =============================================================================
 # SUMMARY TABLES AND PLOTS - INC_DEC
 # =============================================================================
-
-cat("\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
-cat("CREATING SUMMARIES FOR INC_DEC\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
 
 # Create base directory for summaries
 summary_dir_inc_dec = "results/outcome/DRS/inc_dec"
@@ -173,8 +190,6 @@ cat("\n=== MASTER SUMMARY TABLE (INC_DEC) ===\n\n")
 print(master_summary_inc_dec, digits = 4)
 
 # Create outcome model comparison boxplot
-cat("\n\nCreating outcome model comparison boxplot...\n")
-
 plot_outcome_model_boxplot(
   results_list = results_inc_dec,
   estimator_name = "drs",
@@ -192,11 +207,6 @@ cat(
 # COMPARISON 2: INCREASE VS MIX
 # =============================================================================
 
-cat("\n\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
-cat("COMPARISON 2: INCREASE VS MIX\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
-
 # Load tuned GBM parameters
 gbm_params_inc_mix = readRDS("results/weighting/inc_mix_params.rds")
 
@@ -204,11 +214,11 @@ gbm_params_inc_mix = readRDS("results/weighting/inc_mix_params.rds")
 results_inc_mix = list()
 
 # Loop over models
-for (model in 1:4) {
+for (model in 0:5) {
   cat(sprintf(
     "\n>>> Running Model %d: %s\n\n",
     model,
-    outcome_descriptions[model]
+    outcome_descriptions[model + 1]
   ))
 
   # Build result path
@@ -217,6 +227,21 @@ for (model in 1:4) {
     model = model
   )
 
+  # Determine estimator type and weight usage
+  if (model == 0) {
+    # Model 0: Simple difference in means
+    estimator_type = "simple"
+    use_weights = FALSE
+  } else if (model == 1) {
+    # Model 1: Outcome regression without PS weights
+    estimator_type = "or"
+    use_weights = FALSE
+  } else {
+    # Models 2-5: Doubly robust with PS weights
+    estimator_type = "drs"
+    use_weights = TRUE
+  }
+
   # Run analysis
   result = DR_att(
     outcome = "loneliness",
@@ -224,7 +249,7 @@ for (model in 1:4) {
     treated_level = "increase",
     control_level = "mix",
     f.ps = ps_formula,
-    f.out = outcome_models[[model]],
+    f.out = outcome_models[[model + 1]],
     data = d,
     gbm_params = gbm_params_inc_mix,
     bootstrap_method = "reweight",
@@ -238,7 +263,9 @@ for (model in 1:4) {
     ci_type = ci_type,
     sim = sim,
     save_to = result_path,
-    alpha = alpha
+    alpha = alpha,
+    use_weights = use_weights,
+    estimator = estimator_type
   )
 
   # Store result with informative name
@@ -258,11 +285,6 @@ for (model in 1:4) {
 # =============================================================================
 # SUMMARY TABLES AND PLOTS - INC_MIX
 # =============================================================================
-
-cat("\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
-cat("CREATING SUMMARIES FOR INC_MIX\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
 
 # Create base directory for summaries
 summary_dir_inc_mix = "results/outcome/DRS/inc_mix"
@@ -293,8 +315,6 @@ cat("\n=== MASTER SUMMARY TABLE (INC_MIX) ===\n\n")
 print(master_summary_inc_mix, digits = 4)
 
 # Create outcome model comparison boxplot
-cat("\n\nCreating outcome model comparison boxplot...\n")
-
 plot_outcome_model_boxplot(
   results_list = results_inc_mix,
   estimator_name = "drs",
@@ -312,11 +332,6 @@ cat(
 # FINAL COMBINED SUMMARY
 # =============================================================================
 
-cat("\n\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
-cat("FINAL DRS SUMMARY (ALL 8 ANALYSES)\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n\n")
-
 # Combine both comparisons
 final_summary_drs = rbind(
   master_summary_inc_dec,
@@ -327,18 +342,18 @@ final_summary_drs = rbind(
 dir.create("results/outcome/DRS", showWarnings = FALSE, recursive = TRUE)
 write.csv(
   final_summary_drs,
-  "results/outcome/DRS/DRS_master_summary_all_8.csv",
+  "results/outcome/DRS/DRS_master_summary_all_12.csv",
   row.names = FALSE
 )
 
 cat(
-  "\n✓ Final DRS master summary (8 analyses) saved to:",
-  "results/outcome/DRS/DRS_master_summary_all_8.csv",
+  "\n✓ Final Simple/OR/DRS master summary (12 analyses) saved to:",
+  "results/outcome/DRS/DRS_master_summary_all_12.csv",
   "\n"
 )
 
 # Print final summary
-cat("\n=== FINAL DRS SUMMARY (ALL 8 ANALYSES) ===\n\n")
+cat("\n=== FINAL SIMPLE/OR/DRS SUMMARY (ALL 12 ANALYSES) ===\n\n")
 print(final_summary_drs, digits = 4)
 
 # Save complete workspace
@@ -358,12 +373,3 @@ cat(
   "results/outcome/DRS/DRS_complete_workspace.rds",
   "\n"
 )
-
-cat("\n\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
-cat("DRS ANALYSIS COMPLETE!\n")
-cat("=" %>% rep(80) %>% paste0(collapse = ""), "\n")
-cat(sprintf("\nTotal analyses run: 8\n"))
-cat(sprintf("Total bootstrap replications per analysis: %d\n", n_boot))
-cat(sprintf("Results saved to: results/outcome/DRS/\n"))
-cat("\n")
