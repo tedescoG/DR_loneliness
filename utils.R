@@ -1571,7 +1571,7 @@ plot_outcome_model_boxplot = function(
     "Full",
     "Intercept",
     "Baseline",
-    "Base+Depression",
+    "Depression",
     "Full"
   )
 
@@ -1593,18 +1593,27 @@ plot_outcome_model_boxplot = function(
       plot = FALSE
     )
 
+    # Calculate range of last boxplot (model 6 = index 6 in stats matrix)
+    last_box_range = diff(range(temp_plot$stats[, 6]))
+    # Expand Y limits to 3x the last boxplot's range, centered on all data
+    data_center = mean(range(temp_plot$stats))
+
     # Now create empty plot with axis
     plot(
       1,
       type = "n",
       xlim = c(0.5, 6.5),
-      ylim = range(temp_plot$stats),
+      ylim = c(data_center - 1.5 * last_box_range, data_center + 1.5 * last_box_range),
       xaxt = "n",
+      yaxt = "n",
       main = sprintf("%s - ATT Comparison", comparison_label),
       xlab = "",
       ylab = "ATT Estimate",
       cex.lab = 1.2
-    ) # Bigger axis label
+    )
+
+    # Add Y-axis with smaller tick labels
+    axis(2, cex.axis = 0.8)
 
     # Add grid in the background
     grid(nx = NA, ny = NULL, col = rgb(0, 0, 0, alpha = 0.1), lty = 1)
@@ -1628,7 +1637,7 @@ plot_outcome_model_boxplot = function(
       names = model_labels,
       col = box_colors,
       border = border_colors,
-      outline = TRUE,
+      outline = FALSE,
       las = 1,
       add = TRUE,
       xaxt = "n",

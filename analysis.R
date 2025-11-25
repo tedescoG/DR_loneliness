@@ -194,7 +194,7 @@ plot_outcome_model_boxplot(
   results_list = results_inc_dec,
   estimator_name = "drs",
   comparison_label = "Increase vs Decrease",
-  save_path = file.path(summary_dir_inc_dec, "outcome_model_comparison.png")
+  save_path = file.path(summary_dir_inc_dec, "outcome_model_comparison2.png")
 )
 
 cat(
@@ -319,7 +319,7 @@ plot_outcome_model_boxplot(
   results_list = results_inc_mix,
   estimator_name = "drs",
   comparison_label = "Increase vs Mix",
-  save_path = file.path(summary_dir_inc_mix, "outcome_model_comparison.png")
+  save_path = file.path(summary_dir_inc_mix, "outcome_model_comparison2.png")
 )
 
 cat(
